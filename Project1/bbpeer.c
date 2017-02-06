@@ -17,6 +17,8 @@ void listen_for_conn();
 void show_menu();
 void * network_thread(void *);
 void process_choice();
+void request_read();
+void request_write();
 //
 
 //GLOBALS
@@ -59,12 +61,11 @@ void process_choice () {
       break;
     case 2:
       // do read stuff
-      reaquest_write();
+      request_write();
       printf("2 \n");
       break;
-    case 3;
+    case 3:
       //do list stuff
-
       printf("3 \n");
       break;
     case 4:
@@ -86,9 +87,6 @@ void * network_thread (void * param) {
   //do the connection stuff here i think
   while(1){
     printf("network_thread going to sleep\n");
-    sleep(5);
-    printf("network_thread waking up\n");
-
     /*TODO
     HANDLE WHEN YOU GET THE token
     if (tcp_incoming == YOU_HAVE_TOKEN_MESSAGE) {
@@ -99,6 +97,8 @@ void * network_thread (void * param) {
     }
     */
     sem_post(&file_lock); // tell the other thread that it's ok to read/write
+    sleep(5);
+    printf("network_thread waking up\n");
     sem_wait(&file_lock); // tell the other thread that it's not ok to read/write
   }
 }
@@ -114,15 +114,19 @@ void show_menu () {
 }
 
 void request_read () {
+  printf("Waiting for the lock to read!\n");
   sem_wait(&file_lock); //wait for the lock
   printf("Got the lock. I can read now!\n");
-  
+
+  sem_post(&file_lock);
   return;
 }
 
 void request_write () {
+  printf("Waiting for the lock to write!\n");
   sem_wait(&file_lock); //wait for the lock
   printf("Got the lock. I can write now!\n");
 
+  sem_post(&file_lock);
   return;
 }
