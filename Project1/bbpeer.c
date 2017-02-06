@@ -10,6 +10,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <semaphore.h>
 //FUNCTION DECLARATIONS
 void start ();
 void listen_for_conn();
@@ -22,7 +23,7 @@ void process_choice();
 int sockfd;
 int argc;
 char **argv;
-
+sem_t file_lock;
 
 
 
@@ -37,7 +38,7 @@ int main (int argc_, char *argv_[]) {
 }
 
 void start () {
-
+  sem_init(&file_lock, 0 , 0);
   listen_for_conn();
 
   while(1) {
@@ -53,15 +54,18 @@ void process_choice () {
   switch (choice) {
     case 1:
       //do write stuff
+      request_read();
       printf("1 \n");
       break;
     case 2:
       // do read stuff
+      reaquest_write();
       printf("2 \n");
       break;
-    case 3:
-      printf("3 \n");
+    case 3;
       //do list stuff
+
+      printf("3 \n");
       break;
     case 4:
       printf("4 \n");
@@ -81,9 +85,21 @@ void listen_for_conn (int argc, char* argv[]) {
 void * network_thread (void * param) {
   //do the connection stuff here i think
   while(1){
-    printf("n_thread going to sleep\n");
+    printf("network_thread going to sleep\n");
     sleep(5);
-    printf("n_thread waking up\n");
+    printf("network_thread waking up\n");
+
+    /*TODO
+    HANDLE WHEN YOU GET THE token
+    if (tcp_incoming == YOU_HAVE_TOKEN_MESSAGE) {
+      unlock the mutex
+      // other thread will now be able to do stuff
+      lock the mutex
+      pass on the token
+    }
+    */
+    sem_post(&file_lock); // tell the other thread that it's ok to read/write
+    sem_wait(&file_lock); // tell the other thread that it's not ok to read/write
   }
 }
 
@@ -94,5 +110,19 @@ void show_menu () {
   printf("3. list \n");
   printf("4. exit \n");
   printf("\n");
+  return;
+}
+
+void request_read () {
+  sem_wait(&file_lock); //wait for the lock
+  printf("Got the lock. I can read now!\n");
+  
+  return;
+}
+
+void request_write () {
+  sem_wait(&file_lock); //wait for the lock
+  printf("Got the lock. I can write now!\n");
+
   return;
 }
