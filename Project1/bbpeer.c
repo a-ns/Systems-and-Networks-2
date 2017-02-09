@@ -13,6 +13,7 @@
 #include <semaphore.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 //FUNCTION DECLARATIONS
 void start ();
 void listen_for_conn();
@@ -28,7 +29,9 @@ int sockfd;
 int argc;
 char **argv;
 sem_t file_lock;
-
+struct hostent *hostptr;
+struct sockaddr_in dest;
+int PORT = 61002;
 
 
 
@@ -87,22 +90,49 @@ void listen_for_conn (int argc, char* argv[]) {
 
 void * network_thread (void * param) {
   //do the connection stuff here i think
+  char buffer[500];
+  if (argc == 6) {
+    PORT = atoi(argv[2]);
+  }
+  else {
+    PORT = atoi(argv[1]);
+  }
+  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (argc == 6) {
+    hostptr = gethostbyname(argv[3]);
+  }
+  else {
+    hostptr = gethostbyname(argv[2]);
+  }
+  memset((void *) &dest, 0, (size_t)sizeof(dest));
+  dest.sin_family = (short)(AF_INET);
+  memcpy((void *) &dest.sin_addr, (void *) hostptr->h_addr, hostptr->h_length);
+  dest.sin_port = htons((u_short) PORT);
+
   while(1){
     printf("network_thread going to sleep\n");
+    sendto(sockfd, buffer, 500, 0, (struct sockaddr *)&dest, sizeof(dest));
+    bzero(buffer, 500);
+    recvfrom(sockfd, buffer, 500, 0, NULL, NULL);
+    fprintf(stderr, "got %s from server\n", buffer);
     /*TODO
+
     HANDLE WHEN YOU GET THE token
     if (tcp_incoming == YOU_HAVE_TOKEN_MESSAGE) {
       unlock the mutex
       // other thread will now be able to do stuff
       lock the mutex
       pass on the token
+
+      sem_post(&file_lock); // tell the other thread that it's ok to read/write
+      sleep(5);
+      printf("network_thread waking up\n");
+      sem_wait(&file_lock); // tell the other thread that it's not ok to read/write
+
     }
     */
-    sem_post(&file_lock); // tell the other thread that it's ok to read/write
-    sleep(5);
-    printf("network_thread waking up\n");
-    sem_wait(&file_lock); // tell the other thread that it's not ok to read/write
-  }
+
+}
 }
 
 void show_menu () {
