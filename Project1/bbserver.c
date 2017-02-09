@@ -15,6 +15,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 //GLOBALS
+#define JOIN "~"
 int PORT = 61001;
 int listensockfd;
 char hostname[100];
@@ -77,9 +78,12 @@ void start() {
   int numberOfClients = 0;
   while (numberOfClients < MAX_CLIENTS) {
     //process
-    bytesRcvd = recvfrom(listensockfd, buffer, 500, 0,(struct sockaddr *) &clientAddr[0], &clientAddrLen);
-    strcpy(buffer, "hey there you");
-    sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[0], clientAddrLen);
-  }
+    bytesRcvd = recvfrom(listensockfd, buffer, 500, 0,(struct sockaddr *) &clientAddr[numberOfClients], &clientAddrLen);
+    if (strcmp(buffer, JOIN) == 0) {
+	//handle join
+	numberOfClients += 1;
+    }
+    sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[numberOfClients], clientAddrLen);
+}
   return;
 }

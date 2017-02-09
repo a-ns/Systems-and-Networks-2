@@ -102,7 +102,11 @@ void * network_thread (void * param) {
     ME_PORT = atoi(argv[1]);
     SERVER_PORT = atoi(argv[3]);
   }
-  sockfd = socket(AF_INET, SOCK_DGRAM, ME_PORT);
+  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sockfd < 0 ){
+    perror("error opening socket");
+    exit(1);
+  }
   if (argc == 6) {
     hostptr = gethostbyname(argv[3]);
   }
@@ -121,6 +125,7 @@ void * network_thread (void * param) {
     strcpy(buffer, "hello server");
     if (-1 == sendto(sockfd, buffer, 500, 0, (struct sockaddr *)&dest, sizeof(dest))){
       perror("sendto error");
+	exit(1);
     }
     fprintf(stderr, "hello?\n");
     bzero(buffer, 500);
