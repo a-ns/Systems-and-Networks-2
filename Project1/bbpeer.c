@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 //FUNCTION DECLARATIONS
 void start ();
 void listen_for_conn();
@@ -31,7 +32,8 @@ char **argv;
 sem_t file_lock;
 struct hostent *hostptr;
 struct sockaddr_in dest;
-int PORT = 61002;
+int ME_PORT = 61002;
+int SERVER_PORT;
 
 
 
@@ -91,27 +93,36 @@ void listen_for_conn (int argc, char* argv[]) {
 void * network_thread (void * param) {
   //do the connection stuff here i think
   char buffer[500];
+  
   if (argc == 6) {
-    PORT = atoi(argv[2]);
+    ME_PORT = atoi(argv[2]);
+    SERVER_PORT = atoi(argv[4]);
   }
   else {
-    PORT = atoi(argv[1]);
+    ME_PORT = atoi(argv[1]);
+    SERVER_PORT = atoi(argv[3]);
   }
-  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  sockfd = socket(AF_INET, SOCK_DGRAM, ME_PORT);
   if (argc == 6) {
     hostptr = gethostbyname(argv[3]);
   }
   else {
     hostptr = gethostbyname(argv[2]);
   }
+
   memset((void *) &dest, 0, (size_t)sizeof(dest));
   dest.sin_family = (short)(AF_INET);
   memcpy((void *) &dest.sin_addr, (void *) hostptr->h_addr, hostptr->h_length);
-  dest.sin_port = htons((u_short) PORT);
+  dest.sin_port = htons((u_short) SERVER_PORT);
+  fprintf(stderr, "sending data to\n %s , %d", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
 
   while(1){
-    printf("network_thread going to sleep\n");
-    sendto(sockfd, buffer, 500, 0, (struct sockaddr *)&dest, sizeof(dest));
+    fprintf(stderr,"network_thread going to sleep\n");
+    strcpy(buffer, "hello server");
+    if (-1 == sendto(sockfd, buffer, 500, 0, (struct sockaddr *)&dest, sizeof(dest))){
+      perror("sendto error");
+    }
+    fprintf(stderr, "hello?\n");
     bzero(buffer, 500);
     recvfrom(sockfd, buffer, 500, 0, NULL, NULL);
     fprintf(stderr, "got %s from server\n", buffer);
