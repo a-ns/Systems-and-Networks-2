@@ -44,6 +44,10 @@ int SERVER_PORT;
 
 
 int main (int argc_, char *argv_[]) {
+  if (argc_ != 6 || argc_ != 5){
+	perror("Incorrect input parameters");
+	exit(1);
+  }
   argc = argc_;
   argv = argv_;
   start();
@@ -261,8 +265,8 @@ char * craftBulletinMessage(char *message, int bulletinLength) {
     strcat(newMessageBody, " ");
   }
   strcat(newMessageBody, "\n");
-  //now put messageBody into newMessage
-  strcat(newMessage, messageBody);
+  //now put newMessageBody into newMessage
+  strcat(newMessage, newMessageBody);
   //now add </message>\n newMessage
   strcat(newMessage, "</message>\n");
   free(newMessageBody);
