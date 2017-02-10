@@ -5,6 +5,6 @@
 struct BulletinMessage {
   int messageIndex;
   char message[MESSAGE_LENGTH];
-}
+};
 
 #endif
