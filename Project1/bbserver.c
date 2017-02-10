@@ -15,6 +15,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 //GLOBALS
+#define JOIN "~"
 int PORT = 61001;
 int listensockfd;
 char hostname[100];
@@ -57,7 +58,8 @@ void setup() {
 
   memset((void *)&server, 0, (size_t)sizeof(server));
   memcpy((void *) &server.sin_addr, (void *) hostptr->h_addr, hostptr->h_length);
-  server.sin_port = htons(PORT);
+  server.sin_port = htons((u_short)PORT);
+
   server.sin_family = (short)AF_INET;
 
   //bindmemcpy((void *) &server.sin_addr, (void *))
@@ -67,16 +69,21 @@ void setup() {
 }
 
 void start() {
+  fprintf(stderr, "hostname: %s , IP: %s listening on %d\n", hostptr->h_name,  inet_ntoa(server.sin_addr), ntohs(server.sin_port));
   char buffer[500];
   int bytesRcvd;
   int clients_counter = 0;
   struct sockaddr_in clientAddr[MAX_CLIENTS];
-  socklen_t clientAddrLen[MAX_CLIENTS];
-
-  for(;;){
-
+  socklen_t clientAddrLen = sizeof(clientAddr[0]);
+  int numberOfClients = 0;
+  while (numberOfClients < MAX_CLIENTS) {
     //process
-
-  }
+    bytesRcvd = recvfrom(listensockfd, buffer, 500, 0,(struct sockaddr *) &clientAddr[numberOfClients], &clientAddrLen);
+    if (strcmp(buffer, JOIN) == 0) {
+	//handle join
+	numberOfClients += 1;
+    }
+    sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[numberOfClients], clientAddrLen);
+}
   return;
 }
