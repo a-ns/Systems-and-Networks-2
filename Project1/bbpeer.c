@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+
 //FUNCTION DECLARATIONS
 void start ();
 void listen_for_conn();
@@ -23,9 +24,13 @@ void * network_thread(void *);
 void process_choice();
 void request_read();
 void request_write();
+void list_bulletin();
+int get_bulletin_length();
+char * craftBulletinMessage (char *, int);
 //
 
 //GLOBALS
+#define MESSAGE_LENGTH 201
 int sockfd;
 int argc;
 char **argv;
@@ -74,6 +79,7 @@ void process_choice () {
     case 3:
       //do list stuff
       printf("3 \n");
+      list_bulletin();
       break;
     case 4:
       printf("4 \n");
@@ -93,7 +99,7 @@ void listen_for_conn (int argc, char* argv[]) {
 void * network_thread (void * param) {
   //do the connection stuff here i think
   char buffer[500];
-  
+
   if (argc == 6) {
     ME_PORT = atoi(argv[2]);
     SERVER_PORT = atoi(argv[4]);
@@ -166,6 +172,7 @@ void request_read () {
   sem_wait(&file_lock); //wait for the lock
   printf("Got the lock. I can read now!\n");
 
+
   sem_post(&file_lock);
   return;
 }
@@ -174,7 +181,90 @@ void request_write () {
   printf("Waiting for the lock to write!\n");
   sem_wait(&file_lock); //wait for the lock
   printf("Got the lock. I can write now!\n");
+  FILE *bulletinFile = fopen(argv[argc-1], "a");
+  if (NULL == bulletinFile) {
+    perror ("Bulletin file not found.");
+    sem_post(&file_lock);
+    return;
+  }
+  char message[MESSAGE_LENGTH];
+  printf("Enter your message:\n");
+  if (fgets (message, MESSAGE_LENGTH, stdin) == NULL) {
+    perror("No message entered.");
+    sem_post(&file_lock);
+    return;
+  }
+  if (strstr(message, "<!") != NULL) { //contains our sentinel characters in bulletin file which is bad
+    fprintf(stderr, "Invalid characters \"<!\" entered in message.\n");
+    sem_post(&file_lock);
+    return;
+  }
+  int messageCount = get_bulletin_length();
+  char *newBulletinMessage = craftBulletinMessage(message, messageCount);
+  fprintf(bulletinFile, "%s", newBulletinMessage);
+  free(newBulletinMessage);
+  fclose(bulletinFile);
+  sem_post(&file_lock);
+  return;
+}
+
+void list_bulletin() {
+  sem_wait(&file_lock); //wait for the lock
+
+  int messageCount = get_bulletin_length();
+  printf("Current bulletin size: %i", messageCount);
 
   sem_post(&file_lock);
   return;
+}
+
+int get_bulletin_length () {
+  FILE *bulletinFile = fopen(argv[argc-1], "r");
+  if (NULL == bulletinFile) {
+    perror("bulletin file not found!");
+    sem_post(&file_lock);
+    return;
+  }
+  int messageCount = 0;
+  char currentChar = ' ', previousChar = ' ';
+  while (currentChar != EOF) {
+    previousChar = currentChar;
+    currentChar = fgetc(bulletinFile);
+    if(previousChar == '<' && currentChar == '!') {
+      messageCount +=1;
+    }
+  }
+
+  fclose(bulletinFile);
+  return messageCount;
+}
+
+char * craftBulletinMessage(char *message, int bulletinLength) {
+  char *newMessage = malloc(225); //13 + 201 + 11 = 225, <!message XX>\n = 13, message\n = 200, </message>\n = 11
+  char messageIndex[3];
+  char * newMessageBody = malloc(201); //size of a message + newline
+  if (bulletinLength < 10) {
+    messageIndex[0] = 0;
+    messageIndex[1] = bulletinLength + '0';
+    messageIndex[2] = '\0';
+  }
+  else {
+    sprintf(messageIndex, "%d", bulletinLength);
+  }
+  strcat(newMessage, "<!message ");
+  strcat(newMessage, messageIndex);
+  strcat(newMessage, ">\n");
+  // <!message XX>\n has been appended to newMassage
+  //now pad spaces to newMessageBody to get it to length 200 and then append a newline
+  strcat(newMessageBody, message);
+  while (strlen(newMessageBody) != 200) {
+    strcat(newMessageBody, " ");
+  }
+  strcat(newMessageBody, "\n");
+  //now put messageBody into newMessage
+  strcat(newMessage, messageBody);
+  //now add </message>\n newMessage
+  strcat(newMessage, "</message>\n");
+  free(newMessageBody);
+  return newMessage;
 }
