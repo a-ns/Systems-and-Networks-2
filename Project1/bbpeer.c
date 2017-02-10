@@ -2,7 +2,7 @@
 * @filename bbpeer.c
 * @author Alex Lindemann , Nathan Moore
 * @created 1/19/2017
-*
+* run with ./bbpeer -new 61999 ServerIP/HOSTNAME hostIP bb.txt
 * @desc This is a client program for a token ring simulation.
 */
 #include <stdio.h>
@@ -31,20 +31,17 @@ char * craftBulletinMessage (char *, int);
 
 //GLOBALS
 #define MESSAGE_LENGTH 201
-int sockfd;
+
 int argc;
 char **argv;
 sem_t file_lock;
-struct hostent *hostptr;
-struct sockaddr_in dest;
-int ME_PORT = 61002;
-int SERVER_PORT;
+
 
 
 
 
 int main (int argc_, char *argv_[]) {
-  if (argc_ != 6 || argc_ != 5){
+  if ( !(argc_ == 5 || argc_ == 6)) {
 	perror("Incorrect input parameters");
 	exit(1);
   }
@@ -103,6 +100,11 @@ void listen_for_conn (int argc, char* argv[]) {
 void * network_thread (void * param) {
   //do the connection stuff here i think
   char buffer[500];
+  int sockfd;
+  struct hostent *hostptr;
+  struct sockaddr_in dest;
+  int ME_PORT = 61002;
+  int SERVER_PORT;
 
   if (argc == 6) {
     ME_PORT = atoi(argv[2]);
@@ -128,19 +130,21 @@ void * network_thread (void * param) {
   dest.sin_family = (short)(AF_INET);
   memcpy((void *) &dest.sin_addr, (void *) hostptr->h_addr, hostptr->h_length);
   dest.sin_port = htons((u_short) SERVER_PORT);
-  fprintf(stderr, "sending data to\n %s , %d", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
+  fprintf(stderr, "sending data to\n %s , %d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
 
+  strcpy(buffer, "~");
+  if (-1 == sendto(sockfd, buffer, 500, 0, (struct sockaddr *)&dest, sizeof(dest))){
+    perror("sendto error");
+    exit(1);
+  }
+  bzero(buffer, 500);
+  recvfrom(sockfd, buffer, 500, 0, NULL, NULL);
+  fprintf(stderr, "\ngot %s from server\n", buffer);
+  //buffer should have the ip address and port of the person we need to connect to now
   while(1){
+
     fprintf(stderr,"network_thread going to sleep\n");
-    strcpy(buffer, "hello server");
-    if (-1 == sendto(sockfd, buffer, 500, 0, (struct sockaddr *)&dest, sizeof(dest))){
-      perror("sendto error");
-	exit(1);
-    }
-    fprintf(stderr, "hello?\n");
-    bzero(buffer, 500);
-    recvfrom(sockfd, buffer, 500, 0, NULL, NULL);
-    fprintf(stderr, "got %s from server\n", buffer);
+    sleep(5);
     /*TODO
 
     HANDLE WHEN YOU GET THE token
@@ -227,7 +231,7 @@ int get_bulletin_length () {
   if (NULL == bulletinFile) {
     perror("bulletin file not found!");
     sem_post(&file_lock);
-    return;
+    return -1;
   }
   int messageCount = 0;
   char currentChar = ' ', previousChar = ' ';
