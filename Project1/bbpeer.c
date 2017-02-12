@@ -238,6 +238,7 @@ int request_write (char *bulletinFileName) {
   printf("Enter your message:\n");
   if (fgets (message, MESSAGE_LENGTH, stdin) == NULL) {
     perror("No message entered.");
+    sem_post(&file_lock);
     return 1;
   }
   if (strstr(message, "<!") != NULL) { //contains our sentinel characters in bulletin file which is bad
