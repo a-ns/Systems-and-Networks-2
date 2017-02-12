@@ -175,17 +175,23 @@ void show_menu () {
   return;
 }
 
-void request_read () {
-  printf("Waiting for the lock to read!\n");
-  sem_wait(&file_lock); //wait for the lock
-  printf("Got the lock. I can read now!\n");
+void request_read () { // thread should be able to read at any time, no need to wait for a lock
+  printf("Reading is now happening\n");
 
-
-  sem_post(&file_lock);
   return;
 }
 
 void request_write () {
+  char message[MESSAGE_LENGTH];
+  printf("Enter your message:\n");
+  if (fgets (message, MESSAGE_LENGTH, stdin) == NULL) {
+    perror("No message entered.");
+    return;
+  }
+  if (strstr(message, "<!") != NULL) { //contains our sentinel characters in bulletin file which is bad
+    fprintf(stderr, "Invalid characters \"<!\" entered in message.\n");
+    return;
+  }
   printf("Waiting for the lock to write!\n");
   sem_wait(&file_lock); //wait for the lock
   printf("Got the lock. I can write now!\n");
@@ -195,18 +201,7 @@ void request_write () {
     sem_post(&file_lock);
     return;
   }
-  char message[MESSAGE_LENGTH];
-  printf("Enter your message:\n");
-  if (fgets (message, MESSAGE_LENGTH, stdin) == NULL) {
-    perror("No message entered.");
-    sem_post(&file_lock);
-    return;
-  }
-  if (strstr(message, "<!") != NULL) { //contains our sentinel characters in bulletin file which is bad
-    fprintf(stderr, "Invalid characters \"<!\" entered in message.\n");
-    sem_post(&file_lock);
-    return;
-  }
+
   int messageCount = get_bulletin_length();
   char *newBulletinMessage = craftBulletinMessage(message, messageCount);
   fprintf(bulletinFile, "%s", newBulletinMessage);
