@@ -22,11 +22,12 @@ void listen_for_conn();
 void show_menu();
 void * network_thread(void *);
 void process_choice();
-void request_read();
-void request_write();
-void list_bulletin();
-int get_bulletin_length();
+void request_read(char *);
+int request_write(char *);
+void list_bulletin(char *);
+int get_bulletin_length(char *);
 char * craftBulletinMessage (char *, int);
+char * get_bulletin_message (char *, int);
 //
 
 //GLOBALS
@@ -64,23 +65,30 @@ void start () {
 
 void process_choice () {
   char buffer[500];
+  char *bulletinFileName;
+  if (argc == 6) {
+    bulletinFileName = argv[5];
+  }
+  else {
+    bulletinFileName = argv[4];
+  }
   fgets(buffer, 500, stdin);
   int choice = atoi(buffer);
   switch (choice) {
     case 1:
       //do write stuff
-      request_read();
+      request_write(bulletinFileName);
       printf("1 \n");
       break;
     case 2:
       // do read stuff
-      request_write();
+      request_read(bulletinFileName);
       printf("2 \n");
       break;
     case 3:
       //do list stuff
       printf("3 \n");
-      list_bulletin();
+      list_bulletin(bulletinFileName);
       break;
     case 4:
       printf("4 \n");
@@ -175,57 +183,96 @@ void show_menu () {
   return;
 }
 
-void request_read () { // thread should be able to read at any time, no need to wait for a lock
-  printf("Reading is now happening\n");
+void request_read (char *bulletinFileName) { // thread should be able to read at any time, no need to wait for a lock
+  printf("Enter index for message to be read: \n");
+  char buffer[500];
+  fgets(buffer, 500, stdin);
+  int choice = atoi(buffer);
+  char *theMessage = get_bulletin_message(bulletinFileName, choice);
+
+  if (theMessage != NULL){
+
+    printf("The message at index %i:\n", choice);
+    printf("%s\n", theMessage);
+    free(theMessage);
+  }
 
   return;
 }
 
-void request_write () {
+char * get_bulletin_message(char *fileName, int index) {
+  if (index > get_bulletin_length(fileName)) {
+    printf("The message at index %i does not exist\n", index);
+    return NULL;
+  }
+  FILE *bulletinFile = fopen(fileName, "r");
+  if (NULL == bulletinFile) {
+    perror("bulletin file not found!");
+    return NULL;
+  }
+  int messageCount = 0;
+  char currentChar = ' ', previousChar = ' ';
+  while (currentChar != EOF) {
+    previousChar = currentChar;
+    currentChar = fgetc(bulletinFile);
+    if(previousChar == '<' && currentChar == 'm') {
+      messageCount +=1;
+    }
+    if(messageCount == index) {
+      while(fgetc(bulletinFile) != '\n');
+      break;
+    }
+  }
+
+  char *message = malloc(201);
+  fgets(message, 200, bulletinFile);
+
+  fclose(bulletinFile);
+  return message;
+}
+
+int request_write (char *bulletinFileName) {
+  //new version
+
   char message[MESSAGE_LENGTH];
   printf("Enter your message:\n");
   if (fgets (message, MESSAGE_LENGTH, stdin) == NULL) {
     perror("No message entered.");
-    return;
+    return 1;
   }
   if (strstr(message, "<!") != NULL) { //contains our sentinel characters in bulletin file which is bad
     fprintf(stderr, "Invalid characters \"<!\" entered in message.\n");
-    return;
+    sem_post(&file_lock);
+    return 1;
   }
-  printf("Waiting for the lock to write!\n");
-  sem_wait(&file_lock); //wait for the lock
-  printf("Got the lock. I can write now!\n");
-  FILE *bulletinFile = fopen(argv[argc-1], "a");
+  FILE *bulletinFile = fopen(bulletinFileName, "a");
   if (NULL == bulletinFile) {
     perror ("Bulletin file not found.");
-    sem_post(&file_lock);
-    return;
-  }
 
-  int messageCount = get_bulletin_length();
+    sem_post(&file_lock);
+    return 1;
+  }
+  message[strlen(message)-1] = '\0';
+  int messageCount = get_bulletin_length(bulletinFileName);
   char *newBulletinMessage = craftBulletinMessage(message, messageCount);
   fprintf(bulletinFile, "%s", newBulletinMessage);
   free(newBulletinMessage);
   fclose(bulletinFile);
   sem_post(&file_lock);
-  return;
+  return 0;
 }
 
-void list_bulletin() {
-  sem_wait(&file_lock); //wait for the lock
-
-  int messageCount = get_bulletin_length();
+void list_bulletin(char *bulletinFileName) {
+  int messageCount = get_bulletin_length(bulletinFileName);
   printf("Current bulletin size: %i", messageCount);
 
-  sem_post(&file_lock);
   return;
 }
 
-int get_bulletin_length () {
-  FILE *bulletinFile = fopen(argv[argc-1], "r");
+int get_bulletin_length (char *fileName) {
+  FILE *bulletinFile = fopen(fileName, "r");
   if (NULL == bulletinFile) {
     perror("bulletin file not found!");
-    sem_post(&file_lock);
     return -1;
   }
   int messageCount = 0;
@@ -233,7 +280,7 @@ int get_bulletin_length () {
   while (currentChar != EOF) {
     previousChar = currentChar;
     currentChar = fgetc(bulletinFile);
-    if(previousChar == '<' && currentChar == '!') {
+    if(previousChar == '<' && currentChar == 'm') {
       messageCount +=1;
     }
   }
@@ -243,21 +290,15 @@ int get_bulletin_length () {
 }
 
 char * craftBulletinMessage(char *message, int bulletinLength) {
-  char *newMessage = malloc(225); //13 + 201 + 11 = 225, <!message XX>\n = 13, message\n = 200, </message>\n = 11
-  char messageIndex[3];
+  char *newMessage = malloc(225);
+  strcpy(newMessage, "");
+  char messageIndex[5] = "";
+  sprintf(messageIndex, "%d", bulletinLength + 1);
   char * newMessageBody = malloc(201); //size of a message + newline
-  if (bulletinLength < 10) {
-    messageIndex[0] = 0;
-    messageIndex[1] = bulletinLength + '0';
-    messageIndex[2] = '\0';
-  }
-  else {
-    sprintf(messageIndex, "%d", bulletinLength);
-  }
-  strcat(newMessage, "<!message ");
+  strcpy(newMessageBody, "");
+  strcat(newMessage, "<message n=");
   strcat(newMessage, messageIndex);
   strcat(newMessage, ">\n");
-  // <!message XX>\n has been appended to newMassage
   //now pad spaces to newMessageBody to get it to length 200 and then append a newline
   strcat(newMessageBody, message);
   while (strlen(newMessageBody) != 200) {
