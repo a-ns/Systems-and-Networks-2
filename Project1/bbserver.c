@@ -59,6 +59,7 @@ void setup() {
   memset((void *)&server, 0, (size_t)sizeof(server));
   memcpy((void *) &server.sin_addr, (void *) hostptr->h_addr, hostptr->h_length);
   server.sin_port = htons((u_short)PORT);
+  
 
   server.sin_family = (short)AF_INET;
 
@@ -102,6 +103,10 @@ void start() {
     strcat(ipAndPort, " ");
     strcat(ipAndPort, port);
     strcpy(buffer, ipAndPort);
+    strcat(ipAndPort, " ");
+    sprintf(port, "%d", i);
+    strcat(ipAndPort, port);
+    strcpy(buffer, ipAndPort);
     sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[i+1], clientAddrLen);
   }
   //TO SEND TO THE FIRST PERSON WHO JOINED THE INFORMATION FOR THE LAST PERSON TO JOIN
@@ -112,6 +117,10 @@ void start() {
 
   strcat(ipAndPort, inet_ntoa(clientAddr[i-1].sin_addr));
   strcat(ipAndPort, " ");
+  strcat(ipAndPort, port);
+  strcpy(buffer, ipAndPort);
+  strcat(ipAndPort, " ");
+  sprintf(port, "%d", i-1);
   strcat(ipAndPort, port);
   strcpy(buffer, ipAndPort);
   sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[0], clientAddrLen);

@@ -43,8 +43,8 @@ sem_t file_lock;
 
 int main (int argc_, char *argv_[]) {
   if ( !(argc_ == 5 || argc_ == 6)) {
-	perror("Incorrect input parameters");
-	exit(1);
+  	perror("Incorrect input parameters");
+  	exit(1);
   }
   argc = argc_;
   argv = argv_;
@@ -110,8 +110,8 @@ void * network_thread (void * param) {
   char buffer[500];
   int sockfd;
   struct hostent *hostptr;
-  struct sockaddr_in dest;
-  int ME_PORT = 61002;
+  struct sockaddr_in dest, src;
+  int ME_PORT;
   int SERVER_PORT;
 
   if (argc == 6) {
@@ -138,6 +138,16 @@ void * network_thread (void * param) {
   dest.sin_family = (short)(AF_INET);
   memcpy((void *) &dest.sin_addr, (void *) hostptr->h_addr, hostptr->h_length);
   dest.sin_port = htons((u_short) SERVER_PORT);
+
+  memset(&src, 0, sizeof(src));
+  src.sin_family = AF_INET;
+  src.sin_addr.s_addr = htonl(INADDR_ANY);
+  src.sin_port = htons(ME_PORT);
+  if (bind(sockfd, (struct sockaddr *) &src, sizeof(src)) < 0) {
+    perror("bind");
+    exit(1);
+}
+
   fprintf(stderr, "sending data to\n %s , %d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
 
   strcpy(buffer, "~");
@@ -152,6 +162,7 @@ void * network_thread (void * param) {
   while(1){
 
     fprintf(stderr,"network_thread going to sleep\n");
+
     sleep(5);
     /*TODO
 
@@ -232,8 +243,6 @@ char * get_bulletin_message(char *fileName, int index) {
 }
 
 int request_write (char *bulletinFileName) {
-  //new version
-
   char message[MESSAGE_LENGTH];
   printf("Enter your message:\n");
   if (fgets (message, MESSAGE_LENGTH, stdin) == NULL) {
@@ -249,7 +258,6 @@ int request_write (char *bulletinFileName) {
   FILE *bulletinFile = fopen(bulletinFileName, "a");
   if (NULL == bulletinFile) {
     perror ("Bulletin file not found.");
-
     sem_post(&file_lock);
     return 1;
   }
