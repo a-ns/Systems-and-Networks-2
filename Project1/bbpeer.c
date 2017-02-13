@@ -28,12 +28,14 @@ void list_bulletin(char *);
 int get_bulletin_length(char *);
 char * craftBulletinMessage (char *, int);
 char * get_bulletin_message (char *, int);
-void setup_network(char *, int *, struct hostent **, struct sockaddr_in *, struct sockaddr_in *, int *, int *);
+int setup_network(char *, int *, struct hostent **, struct sockaddr_in *, struct sockaddr_in *, int *, int *);
 //
 
 //GLOBALS
 #define MESSAGE_LENGTH 201
-
+#define TOKEN "^"
+#define JOIN "~"
+#define EXIT "#"
 int argc;
 char **argv;
 sem_t file_lock;
@@ -114,39 +116,36 @@ void * network_thread (void * param) {
   struct sockaddr_in dest, src;
   int ME_PORT;
   int SERVER_PORT;
-  setup_network(buffer, &sockfd, &hostptr, &dest, &src, &ME_PORT, &SERVER_PORT);
-
-  //buffer should have the ip address and port of the person we need to connect to now "XXX.XXX.XXX.XXX PORT NUM" if NUM == 0 WE START WITH TOKEN
-
-
+  int go = setup_network(buffer, &sockfd, &hostptr, &dest, &src, &ME_PORT, &SERVER_PORT);
+  //src is us, dest is now the peer we send data to
+  // if go == 0, we start the token
+  if (go == 0) {
+    strcpy(buffer, TOKEN);
+  }
+  struct sockaddr_in peer_sending_to_us;
+  socklen_t peer_sending_to_us_length = sizeof(peer_sending_to_us);
 
   while(1){
-
-    fprintf(stderr,"network_thread going to sleep\n");
-
-    sleep(5);
-    /*TODO
-
-    HANDLE WHEN YOU GET THE token
-    if (tcp_incoming == YOU_HAVE_TOKEN_MESSAGE) {
-      unlock the mutex
+    if (strcmp(buffer, TOKEN) == 0) {
+      //unlock the mutex
       // other thread will now be able to do stuff
-      lock the mutex
-      pass on the token
-
+      //lock the mutex
+      //pass on the token
       sem_post(&file_lock); // tell the other thread that it's ok to read/write
-      sleep(5);
-      printf("network_thread waking up\n");
       sem_wait(&file_lock); // tell the other thread that it's not ok to read/write
-
+      sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest));
     }
-    */
-
+    else if(strcmp(buffer, JOIN) == 0) {
+      //handle a new person joining the ring
+    }
+    else if(strcmp(buffer, EXIT) == 0) {
+      //handle someone exiting the ring
+    }
+    recvfrom(sockfd, buffer, 500, 0, (struct sockaddr *) &peer_sending_to_us, &peer_sending_to_us_length);
+  }
 }
-}
 
-void setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct sockaddr_in *dest, struct sockaddr_in *src, int *ME_PORT, int *SERVER_PORT) {
-  printf("Got here 1\n");
+int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct sockaddr_in *dest, struct sockaddr_in *src, int *ME_PORT, int *SERVER_PORT) {
   if (argc == 6) {
     *ME_PORT = atoi(argv[2]);
     *SERVER_PORT = atoi(argv[4]);
@@ -166,13 +165,11 @@ void setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct
   else {
     *hostptr = gethostbyname(argv[2]);
   }
-  printf("Got here\n");
   memset((void *) dest, 0, (size_t)sizeof(*dest));
   dest->sin_family = (short)(AF_INET);
   memcpy((void *) &(dest->sin_addr), (void *) (*hostptr)->h_addr, (*hostptr)->h_length);
   dest->sin_port = htons((u_short) *SERVER_PORT);
 
-  printf("Got here 2\n");
   memset((void *) src, 0, sizeof(*src));
   src->sin_family = AF_INET;
   src->sin_addr.s_addr = htonl(INADDR_ANY);
@@ -180,7 +177,7 @@ void setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct
   if (bind(*sockfd, (struct sockaddr *) src, sizeof(*src)) < 0) {
     perror("bind");
     exit(1);
-}
+  }
 
   fprintf(stderr, "sending data to\n %s , %d\n", inet_ntoa(dest->sin_addr), ntohs(dest->sin_port));
 
@@ -192,7 +189,17 @@ void setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct
   bzero(buffer, 500);
   recvfrom(*sockfd, buffer, 500, 0, NULL, NULL);
   fprintf(stderr, "\ngot %s from server\n", buffer);
-  return;
+
+  //buffer should have the ip address and port of the person we need to connect to now "XXX.XXX.XXX.XXX PORT NUM" if NUM == 0 WE START WITH TOKEN
+  *hostptr = gethostbyname(strtok(buffer, " "));
+  memset((void *) dest, 0, (size_t)sizeof(*dest));
+  dest->sin_family = (short)(AF_INET);
+  memcpy((void *) &(dest->sin_addr), (void *) (*hostptr)->h_addr, (*hostptr)->h_length);
+  dest->sin_port = htons((u_short) atoi(strtok(NULL, " ")));
+
+  fprintf(stderr, "\nwe are now sending to peer: %s on port %d\n", inet_ntoa(dest->sin_addr), ntohs(dest->sin_port));
+
+  return atoi (strtok(NULL, " "));
 }
 
 void show_menu () {
@@ -258,14 +265,14 @@ int request_write (char *bulletinFileName) {
   printf("Enter your message:\n");
   if (fgets (message, MESSAGE_LENGTH, stdin) == NULL) {
     perror("No message entered.");
-    sem_post(&file_lock);
     return 1;
   }
   if (strstr(message, "<!") != NULL) { //contains our sentinel characters in bulletin file which is bad
     fprintf(stderr, "Invalid characters \"<!\" entered in message.\n");
-    sem_post(&file_lock);
     return 1;
   }
+  fprintf(stderr, "Waiting for access to write. . .\n");
+  sem_wait(&file_lock); //wait for the lock from the network thread
   FILE *bulletinFile = fopen(bulletinFileName, "a");
   if (NULL == bulletinFile) {
     perror ("Bulletin file not found.");
