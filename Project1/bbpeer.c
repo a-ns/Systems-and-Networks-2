@@ -28,6 +28,7 @@ void list_bulletin(char *);
 int get_bulletin_length(char *);
 char * craftBulletinMessage (char *, int);
 char * get_bulletin_message (char *, int);
+void setup_network(char *, int *, struct hostent **, struct sockaddr_in *, struct sockaddr_in *, int *, int *);
 //
 
 //GLOBALS
@@ -113,52 +114,12 @@ void * network_thread (void * param) {
   struct sockaddr_in dest, src;
   int ME_PORT;
   int SERVER_PORT;
+  setup_network(buffer, &sockfd, &hostptr, &dest, &src, &ME_PORT, &SERVER_PORT);
 
-  if (argc == 6) {
-    ME_PORT = atoi(argv[2]);
-    SERVER_PORT = atoi(argv[4]);
-  }
-  else {
-    ME_PORT = atoi(argv[1]);
-    SERVER_PORT = atoi(argv[3]);
-  }
-  sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-  if (sockfd < 0 ){
-    perror("error opening socket");
-    exit(1);
-  }
-  if (argc == 6) {
-    hostptr = gethostbyname(argv[3]);
-  }
-  else {
-    hostptr = gethostbyname(argv[2]);
-  }
+  //buffer should have the ip address and port of the person we need to connect to now "XXX.XXX.XXX.XXX PORT NUM" if NUM == 0 WE START WITH TOKEN
 
-  memset((void *) &dest, 0, (size_t)sizeof(dest));
-  dest.sin_family = (short)(AF_INET);
-  memcpy((void *) &dest.sin_addr, (void *) hostptr->h_addr, hostptr->h_length);
-  dest.sin_port = htons((u_short) SERVER_PORT);
 
-  memset(&src, 0, sizeof(src));
-  src.sin_family = AF_INET;
-  src.sin_addr.s_addr = htonl(INADDR_ANY);
-  src.sin_port = htons(ME_PORT);
-  if (bind(sockfd, (struct sockaddr *) &src, sizeof(src)) < 0) {
-    perror("bind");
-    exit(1);
-}
 
-  fprintf(stderr, "sending data to\n %s , %d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
-
-  strcpy(buffer, "~");
-  if (-1 == sendto(sockfd, buffer, 500, 0, (struct sockaddr *)&dest, sizeof(dest))){
-    perror("sendto error");
-    exit(1);
-  }
-  bzero(buffer, 500);
-  recvfrom(sockfd, buffer, 500, 0, NULL, NULL);
-  fprintf(stderr, "\ngot %s from server\n", buffer);
-  //buffer should have the ip address and port of the person we need to connect to now
   while(1){
 
     fprintf(stderr,"network_thread going to sleep\n");
@@ -182,6 +143,56 @@ void * network_thread (void * param) {
     */
 
 }
+}
+
+void setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct sockaddr_in *dest, struct sockaddr_in *src, int *ME_PORT, int *SERVER_PORT) {
+  printf("Got here 1\n");
+  if (argc == 6) {
+    *ME_PORT = atoi(argv[2]);
+    *SERVER_PORT = atoi(argv[4]);
+  }
+  else {
+    *ME_PORT = atoi(argv[1]);
+    *SERVER_PORT = atoi(argv[3]);
+  }
+  *sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sockfd < 0 ){
+    perror("error opening socket");
+    exit(1);
+  }
+  if (argc == 6) {
+    *hostptr = gethostbyname(argv[3]);
+  }
+  else {
+    *hostptr = gethostbyname(argv[2]);
+  }
+  printf("Got here\n");
+  memset((void *) dest, 0, (size_t)sizeof(*dest));
+  dest->sin_family = (short)(AF_INET);
+  memcpy((void *) &(dest->sin_addr), (void *) (*hostptr)->h_addr, (*hostptr)->h_length);
+  dest->sin_port = htons((u_short) *SERVER_PORT);
+
+  printf("Got here 2\n");
+  memset((void *) src, 0, sizeof(*src));
+  src->sin_family = AF_INET;
+  src->sin_addr.s_addr = htonl(INADDR_ANY);
+  src->sin_port = htons(*ME_PORT);
+  if (bind(*sockfd, (struct sockaddr *) src, sizeof(*src)) < 0) {
+    perror("bind");
+    exit(1);
+}
+
+  fprintf(stderr, "sending data to\n %s , %d\n", inet_ntoa(dest->sin_addr), ntohs(dest->sin_port));
+
+  strcpy(buffer, "~");
+  if (-1 == sendto(*sockfd, buffer, 500, 0, (struct sockaddr *)dest, sizeof(*dest))){
+    perror("sendto error");
+    exit(1);
+  }
+  bzero(buffer, 500);
+  recvfrom(*sockfd, buffer, 500, 0, NULL, NULL);
+  fprintf(stderr, "\ngot %s from server\n", buffer);
+  return;
 }
 
 void show_menu () {
