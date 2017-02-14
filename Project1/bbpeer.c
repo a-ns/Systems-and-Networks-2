@@ -115,8 +115,8 @@ void * network_thread (void * param) {
   struct hostent *hostptr;
   struct sockaddr_in dest, src;
   int ME_PORT;
-  int SERVER_PORT;
-  int go = setup_network(buffer, &sockfd, &hostptr, &dest, &src, &ME_PORT, &SERVER_PORT);
+  int DEST_PORT;
+  int go = setup_network(buffer, &sockfd, &hostptr, &dest, &src, &ME_PORT, &DEST_PORT);
   //src is us, dest is now the peer we send data to
   // if go == 0, we start the token
   if (go == 0) {
@@ -132,27 +132,34 @@ void * network_thread (void * param) {
       //lock the mutex
       //pass on the token
       sem_post(&file_lock); // tell the other thread that it's ok to read/write
+
       sem_wait(&file_lock); // tell the other thread that it's not ok to read/write
       sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest));
     }
     else if(strcmp(buffer, JOIN) == 0) {
       //handle a new person joining the ring
+      //tell the new peer to point to our current peer
+      //point to the new peer instead of the current peer
+
     }
-    else if(strcmp(buffer, EXIT) == 0) {
+    else if(strstr(buffer, EXIT) != NULL) { // EXIT IS A SUBSTRING OF BUFFER
       //handle someone exiting the ring
+      //exit request has to go the whole way through the ring to get to the guy who points to us
+      //once there he has to point to the person we currently point to, so we need to send that data
+      //ie "EXIT IP_OF_PEER_BEFORE:PORT IP_OF_PEER_THEY_SHOULD_POINT_TO:PORT"
     }
     recvfrom(sockfd, buffer, 500, 0, (struct sockaddr *) &peer_sending_to_us, &peer_sending_to_us_length);
   }
 }
 
-int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct sockaddr_in *dest, struct sockaddr_in *src, int *ME_PORT, int *SERVER_PORT) {
+int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct sockaddr_in *dest, struct sockaddr_in *src, int *ME_PORT, int *DEST_PORT) {
   if (argc == 6) {
     *ME_PORT = atoi(argv[2]);
-    *SERVER_PORT = atoi(argv[4]);
+    *DEST_PORT = atoi(argv[4]);
   }
   else {
     *ME_PORT = atoi(argv[1]);
-    *SERVER_PORT = atoi(argv[3]);
+    *DEST_PORT = atoi(argv[3]);
   }
   *sockfd = socket(AF_INET, SOCK_DGRAM, 0);
   if (sockfd < 0 ){
@@ -168,7 +175,7 @@ int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct 
   memset((void *) dest, 0, (size_t)sizeof(*dest));
   dest->sin_family = (short)(AF_INET);
   memcpy((void *) &(dest->sin_addr), (void *) (*hostptr)->h_addr, (*hostptr)->h_length);
-  dest->sin_port = htons((u_short) *SERVER_PORT);
+  dest->sin_port = htons((u_short) *DEST_PORT);
 
   memset((void *) src, 0, sizeof(*src));
   src->sin_family = AF_INET;
