@@ -10,3 +10,21 @@ boop
 <message n=4>
 spoopy                                                                                                                                                                                                  
 </message>
+<message n=5>
+spooky                                                                                                                                                                                                  
+</message>
+<message n=6>
+adhoc peer signing in                                                                                                                                                                                   
+</message>
+<message n=7>
+original peer signing in                                                                                                                                                                                
+</message>
+<message n=8>
+other original peer signing in                                                                                                                                                                          
+</message>
+<message n=9>
+i'm the latest peer signing in                                                                                                                                                                          
+</message>
+<message n=10>
+42                                                                                                                                                                                                      
+</message>

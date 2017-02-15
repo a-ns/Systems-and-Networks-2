@@ -59,7 +59,7 @@ void setup() {
   memset((void *)&server, 0, (size_t)sizeof(server));
   memcpy((void *) &server.sin_addr, (void *) hostptr->h_addr, hostptr->h_length);
   server.sin_port = htons((u_short)PORT);
-  
+
 
   server.sin_family = (short)AF_INET;
 
@@ -92,7 +92,7 @@ void start() {
   }
   //we got the number of clients needed to form a ring
   int i;
-  for(i = 0 ; i < numberOfClients; ++i) {
+  for(i = 0 ; i < numberOfClients - 1; ++i) {
     //go through and tell each client which new person to talk to
     char ipAndPort[500] = "";
 
@@ -107,22 +107,24 @@ void start() {
     sprintf(port, "%d", i);
     strcat(ipAndPort, port);
     strcpy(buffer, ipAndPort);
+    fprintf(stderr, "sending \"%s\"\n", buffer);
     sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[i+1], clientAddrLen);
   }
-  //TO SEND TO THE FIRST PERSON WHO JOINED THE INFORMATION FOR THE LAST PERSON TO JOIN
+  //TO SEND TnO THE FIRST PERSON WHO JOINED THE INFORMATION FOR THE LAST PERSON TO JOIN
   char ipAndPort[500] = "";
 
   char port[50] = "";
-  sprintf(port, "%d", ntohs(clientAddr[i-1].sin_port));
+  sprintf(port, "%d", ntohs(clientAddr[i].sin_port));
 
-  strcat(ipAndPort, inet_ntoa(clientAddr[i-1].sin_addr));
+  strcat(ipAndPort, inet_ntoa(clientAddr[i].sin_addr));
   strcat(ipAndPort, " ");
   strcat(ipAndPort, port);
   strcpy(buffer, ipAndPort);
   strcat(ipAndPort, " ");
-  sprintf(port, "%d", i-1);
+  sprintf(port, "%d", i);
   strcat(ipAndPort, port);
   strcpy(buffer, ipAndPort);
+  fprintf(stderr, "sending \"%s\"\n", buffer);
   sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[0], clientAddrLen);
   //------------------------------------------------------------------------------
   return;

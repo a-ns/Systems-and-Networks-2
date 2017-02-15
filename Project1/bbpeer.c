@@ -122,6 +122,10 @@ void * network_thread (void * param) {
   if (go == 0) {
     strcpy(buffer, TOKEN);
   }
+  else {
+    strcpy(buffer, " ");
+  }
+  fprintf(stderr, "the buffer is %s\n", buffer);
   struct sockaddr_in peer_sending_to_us;
   socklen_t peer_sending_to_us_length = sizeof(peer_sending_to_us);
 
@@ -140,6 +144,21 @@ void * network_thread (void * param) {
       //handle a new person joining the ring
       //tell the new peer to point to our current peer
       //point to the new peer instead of the current peer
+      char peerIPAndPort[500] = "";
+      char peerIP[250] = "";
+      char peerPort[250] = "";
+      strcpy(peerIP, inet_ntoa(dest.sin_addr));
+      sprintf(peerPort, "%d", ntohs(dest.sin_port));
+      strcat(peerIPAndPort, peerIP); strcat(peerIPAndPort, " "); strcat (peerIPAndPort, peerPort); strcat(peerIPAndPort, " "); strcat(peerIPAndPort, "1");
+      strcpy(buffer, peerIPAndPort);
+
+      fprintf(stderr, "join request: sending %s data to\n %s , %d\n", buffer, inet_ntoa(peer_sending_to_us.sin_addr), ntohs(peer_sending_to_us.sin_port));
+
+
+
+      memcpy((void *) &dest.sin_addr, (void *) &peer_sending_to_us.sin_addr, sizeof(peer_sending_to_us.sin_addr));
+      memcpy((void *) &dest.sin_port, (void *) &peer_sending_to_us.sin_port, sizeof(peer_sending_to_us.sin_port));
+      sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest));
 
     }
     else if(strstr(buffer, EXIT) != NULL) { // EXIT IS A SUBSTRING OF BUFFER
@@ -147,6 +166,7 @@ void * network_thread (void * param) {
       //exit request has to go the whole way through the ring to get to the guy who points to us
       //once there he has to point to the person we currently point to, so we need to send that data
       //ie "EXIT IP_OF_PEER_BEFORE:PORT IP_OF_PEER_THEY_SHOULD_POINT_TO:PORT"
+      //in the mean time, if we get the TOKEN, we should still send it off to our current peer
     }
     recvfrom(sockfd, buffer, 500, 0, (struct sockaddr *) &peer_sending_to_us, &peer_sending_to_us_length);
   }
@@ -188,7 +208,7 @@ int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct 
 
   fprintf(stderr, "sending data to\n %s , %d\n", inet_ntoa(dest->sin_addr), ntohs(dest->sin_port));
 
-  strcpy(buffer, "~");
+  strcpy(buffer, JOIN);
   if (-1 == sendto(*sockfd, buffer, 500, 0, (struct sockaddr *)dest, sizeof(*dest))){
     perror("sendto error");
     exit(1);
