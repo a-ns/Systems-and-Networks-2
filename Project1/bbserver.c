@@ -108,7 +108,10 @@ void start() {
     strcat(ipAndPort, port);
     strcpy(buffer, ipAndPort);
     fprintf(stderr, "sending \"%s\"\n", buffer);
-    sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[i+1], clientAddrLen);
+    if(sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[i+1], clientAddrLen) < 0){
+      perror("sendto fail1");
+      exit(1);
+    }
   }
   //TO SEND TnO THE FIRST PERSON WHO JOINED THE INFORMATION FOR THE LAST PERSON TO JOIN
   char ipAndPort[500] = "";
@@ -125,7 +128,10 @@ void start() {
   strcat(ipAndPort, port);
   strcpy(buffer, ipAndPort);
   fprintf(stderr, "sending \"%s\"\n", buffer);
-  sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[0], clientAddrLen);
+  if(sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[0], clientAddrLen)<0){
+    perror("sendto fail2");
+    exit(1);
+  }
   //------------------------------------------------------------------------------
   return;
 }

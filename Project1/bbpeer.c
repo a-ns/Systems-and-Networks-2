@@ -18,6 +18,7 @@
 
 //FUNCTION DECLARATIONS
 void start ();
+int get_ip(char *, char *);
 void listen_for_conn();
 void show_menu();
 void * network_thread(void *);
@@ -29,6 +30,8 @@ int get_bulletin_length(char *);
 char * craftBulletinMessage (char *, int);
 char * get_bulletin_message (char *, int);
 int setup_network(char *, int *, struct hostent **, struct sockaddr_in *, struct sockaddr_in *, int *, int *);
+void exit_loop();
+int i_want_out();
 //
 
 //GLOBALS
@@ -39,7 +42,8 @@ int setup_network(char *, int *, struct hostent **, struct sockaddr_in *, struct
 int argc;
 char **argv;
 sem_t file_lock;
-
+pthread_mutex_t quit_lock;
+int QUITTER = 0;
 
 
 
@@ -95,6 +99,7 @@ void process_choice () {
       break;
     case 4:
       printf("4 \n");
+      exit_loop();
       //do exit stuff, leave token ring
       break;
     default:
@@ -125,11 +130,12 @@ void * network_thread (void * param) {
   else {
     strcpy(buffer, " ");
   }
-  fprintf(stderr, "the buffer is %s\n", buffer);
+//  fprintf(stderr, "the buffer is %s\n", buffer);
   struct sockaddr_in peer_sending_to_us;
   socklen_t peer_sending_to_us_length = sizeof(peer_sending_to_us);
 
   while(1){
+//    fprintf(stderr, "buffer: %s           from %s:%d\n", buffer, inet_ntoa(peer_sending_to_us.sin_addr), ntohs(peer_sending_to_us.sin_port));
     if (strcmp(buffer, TOKEN) == 0) {
       //unlock the mutex
       // other thread will now be able to do stuff
@@ -138,7 +144,11 @@ void * network_thread (void * param) {
       sem_post(&file_lock); // tell the other thread that it's ok to read/write
 
       sem_wait(&file_lock); // tell the other thread that it's not ok to read/write
-      sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest));
+      if(sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest)) < 0) {
+        perror("sendto fail1");
+        exit(1);
+      }
+//      fprintf(stderr, "sending token to %s:%d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
     }
     else if(strcmp(buffer, JOIN) == 0) {
       //handle a new person joining the ring
@@ -152,13 +162,16 @@ void * network_thread (void * param) {
       strcat(peerIPAndPort, peerIP); strcat(peerIPAndPort, " "); strcat (peerIPAndPort, peerPort); strcat(peerIPAndPort, " "); strcat(peerIPAndPort, "1");
       strcpy(buffer, peerIPAndPort);
 
-      fprintf(stderr, "join request: sending %s data to\n %s , %d\n", buffer, inet_ntoa(peer_sending_to_us.sin_addr), ntohs(peer_sending_to_us.sin_port));
+    //  fprintf(stderr, "join request: sending %s data to\n %s , %d\n", buffer, inet_ntoa(peer_sending_to_us.sin_addr), ntohs(peer_sending_to_us.sin_port));
 
 
 
       memcpy((void *) &dest.sin_addr, (void *) &peer_sending_to_us.sin_addr, sizeof(peer_sending_to_us.sin_addr));
       memcpy((void *) &dest.sin_port, (void *) &peer_sending_to_us.sin_port, sizeof(peer_sending_to_us.sin_port));
-      sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest));
+      if(sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest)) < 0){
+        perror("sendto fail 2");
+        exit(1);
+      }
 
     }
     else if(strstr(buffer, EXIT) != NULL) { // EXIT IS A SUBSTRING OF BUFFER
@@ -167,6 +180,106 @@ void * network_thread (void * param) {
       //once there he has to point to the person we currently point to, so we need to send that data
       //ie "EXIT IP_OF_PEER_BEFORE:PORT IP_OF_PEER_THEY_SHOULD_POINT_TO:PORT"
       //in the mean time, if we get the TOKEN, we should still send it off to our current peer
+      char tmpBuffer[500] = "";
+      strcpy(tmpBuffer, buffer);
+      char *ipAndPort_of_peer_that_should_switch;
+      strtok(tmpBuffer, " "); //point past "EXIT" in buffer
+      ipAndPort_of_peer_that_should_switch = strtok(NULL, " "); //gets ip and port
+      char *ip = strtok(ipAndPort_of_peer_that_should_switch, ":");
+      char *port = strtok(NULL, ":");
+      char us_host[500];
+      char us_ip[500];
+      gethostname(us_host, 500);
+      get_ip(us_host, us_ip);
+      //fprintf(stderr, "%s    %s    %s     %d", ip, us_host, port, ntohs(src.sin_port));
+      if (strcmp(ip, us_ip) == 0 && atoi(port) == htons(src.sin_port)) { //if we are the one who the EXIT message is intended for
+
+      //  printf("I'm supposed to change!\n");
+        //change who we point to
+        strtok(buffer, " ");
+        strtok(NULL, " ");
+        char *newIPAndPort = strtok(NULL, " ");
+        char *newIP = strtok(newIPAndPort, ":");
+        int newPort = atoi(strtok(NULL, ":"));
+        char okMessage[500] ="";
+        strcpy(okMessage, "&");
+        if(sendto(sockfd, okMessage, 500, 0, (struct sockaddr *) &dest, sizeof(dest)) < 0) {
+          perror("sento fail 3");
+          exit(1);
+        }
+    //    fprintf(stderr, "new peer is: %s:%d",  newIP, newPort);
+        inet_pton(AF_INET, newIP, &dest.sin_addr);
+        dest.sin_port = htons((u_short)newPort);
+      }
+      else { //pass the message along
+      //  printf("passing along EXIT message.\n");
+        if(sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest)) < 0){
+          perror("sento fail 4");
+          exit(1);
+        }
+      }
+    }
+    if (i_want_out()) {
+      //signal that you want out of the loop
+      //put in the buffer "EXIT IP_PERSON_BEFORE:PORT_BEFORE IP_PERSON_AFTER:PORT_AFTER"
+      char message[500] = "";
+
+      char ipBefore[500] = "";
+      strcat(ipBefore, inet_ntoa(peer_sending_to_us.sin_addr));
+      char portBefore[50] = "";
+      sprintf(portBefore, "%d", ntohs(peer_sending_to_us.sin_port));
+
+      char ipAfter[500] = "";
+      strcat(ipAfter, inet_ntoa(dest.sin_addr));
+      char portAfter[50] = "";
+      sprintf(portAfter, "%d", ntohs(dest.sin_port));
+
+      strcat(message, EXIT);
+      strcat(message, " ");
+      strcat(message, ipBefore);
+      strcat(message, ":");
+      strcat(message, portBefore);
+      strcat(message, " ");
+      strcat(message, ipAfter);
+      strcat(message, ":");
+      strcat(message, portAfter);
+      strcpy(buffer, message);
+  //    fprintf(stderr, "the exit message is: \"%s\"\n", buffer);
+      if(sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest)) < 0 ) {
+        perror("sento fail 5");
+        exit(1);
+      }
+      while(1) {
+        recvfrom(sockfd, buffer, 500, 0, (struct sockaddr *) &peer_sending_to_us, &peer_sending_to_us_length);
+        if (strcmp(buffer, "&") == 0) {
+          //  fprintf(stderr, "safe to quit.\n");
+            exit(0);
+        }
+        else  {
+          //fprintf(stderr, "i got a new message while exiting! \"%s\"passing it along\n", buffer);
+          if (strstr(buffer, EXIT) != NULL){
+            char tmpBuffer[500] = "";
+            strcpy(tmpBuffer, buffer);
+            char *ipAndPort_of_peer_that_should_switch;
+            strtok(tmpBuffer, " "); //point past "EXIT" in buffer
+            ipAndPort_of_peer_that_should_switch = strtok(NULL, " "); //gets ip and port
+            char *ip = strtok(ipAndPort_of_peer_that_should_switch, ":");
+            char *port = strtok(NULL, ":");
+            char us_host[500];
+            char us_ip[500];
+            gethostname(us_host, 500);
+            get_ip(us_host, us_ip);
+            if (strcmp(ip, us_ip) == 0 && atoi(port) == htons(src.sin_port)) { //if we send the message back to ourselves
+              exit(0);
+            }
+          }
+          fprintf(stderr, "\n%s:%d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
+          if(sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest)) <0 ) {
+            perror("sento fail 6");
+            exit(1);
+          }
+        }
+      }
     }
     recvfrom(sockfd, buffer, 500, 0, (struct sockaddr *) &peer_sending_to_us, &peer_sending_to_us_length);
   }
@@ -205,8 +318,7 @@ int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct 
     perror("bind");
     exit(1);
   }
-
-  fprintf(stderr, "sending data to\n %s , %d\n", inet_ntoa(dest->sin_addr), ntohs(dest->sin_port));
+//  fprintf(stderr, "sending data to\n %s , %d\n", inet_ntoa(dest->sin_addr), ntohs(dest->sin_port));
 
   strcpy(buffer, JOIN);
   if (-1 == sendto(*sockfd, buffer, 500, 0, (struct sockaddr *)dest, sizeof(*dest))){
@@ -215,7 +327,7 @@ int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct 
   }
   bzero(buffer, 500);
   recvfrom(*sockfd, buffer, 500, 0, NULL, NULL);
-  fprintf(stderr, "\ngot %s from server\n", buffer);
+  //fprintf(stderr, "\ngot %s from server\n", buffer);
 
   //buffer should have the ip address and port of the person we need to connect to now "XXX.XXX.XXX.XXX PORT NUM" if NUM == 0 WE START WITH TOKEN
   *hostptr = gethostbyname(strtok(buffer, " "));
@@ -224,7 +336,7 @@ int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct 
   memcpy((void *) &(dest->sin_addr), (void *) (*hostptr)->h_addr, (*hostptr)->h_length);
   dest->sin_port = htons((u_short) atoi(strtok(NULL, " ")));
 
-  fprintf(stderr, "\nwe are now sending to peer: %s on port %d\n", inet_ntoa(dest->sin_addr), ntohs(dest->sin_port));
+//  fprintf(stderr, "\nwe are now sending to peer: %s on port %d\n", inet_ntoa(dest->sin_addr), ntohs(dest->sin_port));
 
   return atoi (strtok(NULL, " "));
 }
@@ -298,7 +410,7 @@ int request_write (char *bulletinFileName) {
     fprintf(stderr, "Invalid characters \"<!\" entered in message.\n");
     return 1;
   }
-  fprintf(stderr, "Waiting for access to write. . .\n");
+//  fprintf(stderr, "Waiting for access to write. . .\n");
   sem_wait(&file_lock); //wait for the lock from the network thread
   FILE *bulletinFile = fopen(bulletinFileName, "a");
   if (NULL == bulletinFile) {
@@ -365,4 +477,33 @@ char * craftBulletinMessage(char *message, int bulletinLength) {
   strcat(newMessage, "</message>\n");
   free(newMessageBody);
   return newMessage;
+}
+
+void exit_loop () {
+//  fprintf(stderr, "you want to quit, locking\n");
+  pthread_mutex_lock(&quit_lock);
+  QUITTER = 1;
+  pthread_mutex_unlock(&quit_lock);
+  return;
+}
+
+int i_want_out() {
+  pthread_mutex_lock(&quit_lock);
+  int returnv = QUITTER;
+  pthread_mutex_unlock(&quit_lock);
+  return returnv;
+}
+
+int get_ip(char * hostname , char* ip)
+{  struct hostent *he;
+   struct in_addr **addr_list;
+   int i;
+   if ( (he = gethostbyname( hostname ) ) == NULL)
+   { herror("gethostbyname");
+     return 1;}
+   addr_list = (struct in_addr **) he->h_addr_list;
+    for(i = 0; addr_list[i] != NULL; i++)
+    {   strcpy(ip , inet_ntoa(*addr_list[i]) );
+        return 0;}
+    return 1;
 }
