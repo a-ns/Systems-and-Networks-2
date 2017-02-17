@@ -32,6 +32,7 @@ char * get_bulletin_message (char *, int);
 int setup_network(char *, int *, struct hostent **, struct sockaddr_in *, struct sockaddr_in *, int *, int *);
 void exit_loop();
 int i_want_out();
+void craft_exit_message(char *, struct sockaddr_in, struct sockaddr_in);
 //
 
 //GLOBALS
@@ -39,6 +40,7 @@ int i_want_out();
 #define TOKEN "^"
 #define JOIN "~"
 #define EXIT "#"
+#define EXIT_ACK "&"
 int argc;
 char **argv;
 sem_t file_lock;
@@ -53,7 +55,7 @@ int main (int argc_, char *argv_[]) {
   	perror("Incorrect input parameters");
   	exit(1);
   }
-  argc = argc_;
+  argc = argc_; /* make argc and argv global */
   argv = argv_;
   start();
 
@@ -70,6 +72,9 @@ void start () {
   }
 }
 
+/*
+* Gets the user input for what they would like to do and then does that choice.
+*/
 void process_choice () {
   char buffer[500];
   char *bulletinFileName;
@@ -85,20 +90,16 @@ void process_choice () {
     case 1:
       //do write stuff
       request_write(bulletinFileName);
-      printf("1 \n");
       break;
     case 2:
       // do read stuff
       request_read(bulletinFileName);
-      printf("2 \n");
       break;
     case 3:
       //do list stuff
-      printf("3 \n");
       list_bulletin(bulletinFileName);
       break;
     case 4:
-      printf("4 \n");
       exit_loop();
       //do exit stuff, leave token ring
       break;
@@ -106,13 +107,18 @@ void process_choice () {
       printf("Unknown input:  %i\n", choice);
   }
 }
-
+/*
+* Creates the network thread
+*/
 void listen_for_conn (int argc, char* argv[]) {
   pthread_t thread;
   pthread_create(&thread, NULL, network_thread, NULL);
   return;
 }
 
+/*
+* The network thread that runs in the background. This is a mess.
+*/
 void * network_thread (void * param) {
   //do the connection stuff here i think
   char buffer[500];
@@ -134,7 +140,7 @@ void * network_thread (void * param) {
   struct sockaddr_in peer_sending_to_us;
   socklen_t peer_sending_to_us_length = sizeof(peer_sending_to_us);
 
-  while(1){
+  while(1){ //just keep doing this over and over
 //    fprintf(stderr, "buffer: %s           from %s:%d\n", buffer, inet_ntoa(peer_sending_to_us.sin_addr), ntohs(peer_sending_to_us.sin_port));
     if (strcmp(buffer, TOKEN) == 0) {
       //unlock the mutex
@@ -163,8 +169,6 @@ void * network_thread (void * param) {
       strcpy(buffer, peerIPAndPort);
 
     //  fprintf(stderr, "join request: sending %s data to\n %s , %d\n", buffer, inet_ntoa(peer_sending_to_us.sin_addr), ntohs(peer_sending_to_us.sin_port));
-
-
 
       memcpy((void *) &dest.sin_addr, (void *) &peer_sending_to_us.sin_addr, sizeof(peer_sending_to_us.sin_addr));
       memcpy((void *) &dest.sin_port, (void *) &peer_sending_to_us.sin_port, sizeof(peer_sending_to_us.sin_port));
@@ -202,7 +206,7 @@ void * network_thread (void * param) {
         char *newIP = strtok(newIPAndPort, ":");
         int newPort = atoi(strtok(NULL, ":"));
         char okMessage[500] ="";
-        strcpy(okMessage, "&");
+        strcpy(okMessage, EXIT_ACK);
         if(sendto(sockfd, okMessage, 500, 0, (struct sockaddr *) &dest, sizeof(dest)) < 0) {
           perror("sento fail 3");
           exit(1);
@@ -223,26 +227,8 @@ void * network_thread (void * param) {
       //signal that you want out of the loop
       //put in the buffer "EXIT IP_PERSON_BEFORE:PORT_BEFORE IP_PERSON_AFTER:PORT_AFTER"
       char message[500] = "";
+      craft_exit_message(message, peer_sending_to_us, dest);
 
-      char ipBefore[500] = "";
-      strcat(ipBefore, inet_ntoa(peer_sending_to_us.sin_addr));
-      char portBefore[50] = "";
-      sprintf(portBefore, "%d", ntohs(peer_sending_to_us.sin_port));
-
-      char ipAfter[500] = "";
-      strcat(ipAfter, inet_ntoa(dest.sin_addr));
-      char portAfter[50] = "";
-      sprintf(portAfter, "%d", ntohs(dest.sin_port));
-
-      strcat(message, EXIT);
-      strcat(message, " ");
-      strcat(message, ipBefore);
-      strcat(message, ":");
-      strcat(message, portBefore);
-      strcat(message, " ");
-      strcat(message, ipAfter);
-      strcat(message, ":");
-      strcat(message, portAfter);
       strcpy(buffer, message);
   //    fprintf(stderr, "the exit message is: \"%s\"\n", buffer);
       if(sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest)) < 0 ) {
@@ -251,7 +237,7 @@ void * network_thread (void * param) {
       }
       while(1) {
         recvfrom(sockfd, buffer, 500, 0, (struct sockaddr *) &peer_sending_to_us, &peer_sending_to_us_length);
-        if (strcmp(buffer, "&") == 0) {
+        if (strcmp(buffer, EXIT_ACK) == 0) {
           //  fprintf(stderr, "safe to quit.\n");
             exit(0);
         }
@@ -273,7 +259,7 @@ void * network_thread (void * param) {
               exit(0);
             }
           }
-          fprintf(stderr, "\n%s:%d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
+          //fprintf(stderr, "\n%s:%d\n", inet_ntoa(dest.sin_addr), ntohs(dest.sin_port));
           if(sendto(sockfd, buffer, 500, 0, (struct sockaddr *) &dest, sizeof(dest)) <0 ) {
             perror("sento fail 6");
             exit(1);
@@ -285,6 +271,34 @@ void * network_thread (void * param) {
   }
 }
 
+/*
+* Stuffs an exit message into message consisting of the desired recipient and the desired recipients new peer
+*/
+void craft_exit_message(char *message, struct sockaddr_in peer_sending_to_us, struct sockaddr_in dest) {
+  char ipBefore[500] = "";
+  strcat(ipBefore, inet_ntoa(peer_sending_to_us.sin_addr));
+  char portBefore[50] = "";
+  sprintf(portBefore, "%d", ntohs(peer_sending_to_us.sin_port));
+
+  char ipAfter[500] = "";
+  strcat(ipAfter, inet_ntoa(dest.sin_addr));
+  char portAfter[50] = "";
+  sprintf(portAfter, "%d", ntohs(dest.sin_port));
+
+  strcat(message, EXIT);
+  strcat(message, " ");
+  strcat(message, ipBefore);
+  strcat(message, ":");
+  strcat(message, portBefore);
+  strcat(message, " ");
+  strcat(message, ipAfter);
+  strcat(message, ":");
+  strcat(message, portAfter);
+  return;
+}
+/*
+* Initializes global variables and other network required things upon running the program.
+*/
 int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct sockaddr_in *dest, struct sockaddr_in *src, int *ME_PORT, int *DEST_PORT) {
   if (argc == 6) {
     *ME_PORT = atoi(argv[2]);
@@ -341,6 +355,9 @@ int setup_network(char * buffer, int * sockfd, struct hostent **hostptr, struct 
   return atoi (strtok(NULL, " "));
 }
 
+/*
+* The menu the user sees.
+*/
 void show_menu () {
   printf("\n");
   printf("1. write\n");
@@ -351,7 +368,10 @@ void show_menu () {
   return;
 }
 
-void request_read (char *bulletinFileName) { // thread should be able to read at any time, no need to wait for a lock
+/*
+* prints out a message from the bulletin board.
+*/
+void request_read (char *bulletinFileName) {
   printf("Enter index for message to be read: \n");
   char buffer[500];
   fgets(buffer, 500, stdin);
@@ -359,7 +379,6 @@ void request_read (char *bulletinFileName) { // thread should be able to read at
   char *theMessage = get_bulletin_message(bulletinFileName, choice);
 
   if (theMessage != NULL){
-
     printf("The message at index %i:\n", choice);
     printf("%s\n", theMessage);
     free(theMessage);
@@ -368,11 +387,15 @@ void request_read (char *bulletinFileName) { // thread should be able to read at
   return;
 }
 
+/*
+*Returns a message from the bulletin board.
+*/
 char * get_bulletin_message(char *fileName, int index) {
   if (index > get_bulletin_length(fileName)) {
     printf("The message at index %i does not exist\n", index);
     return NULL;
   }
+  sem_wait(&file_lock);
   FILE *bulletinFile = fopen(fileName, "r");
   if (NULL == bulletinFile) {
     perror("bulletin file not found!");
@@ -394,11 +417,14 @@ char * get_bulletin_message(char *fileName, int index) {
 
   char *message = malloc(201);
   fgets(message, 200, bulletinFile);
-
   fclose(bulletinFile);
+  sem_post(&file_lock);
   return message;
 }
 
+/*
+* Writes a message to the specified file.
+*/
 int request_write (char *bulletinFileName) {
   char message[MESSAGE_LENGTH];
   printf("Enter your message:\n");
@@ -425,16 +451,22 @@ int request_write (char *bulletinFileName) {
   free(newBulletinMessage);
   fclose(bulletinFile);
   sem_post(&file_lock);
+  fprintf(stderr, "Message succefully posted.\n");
   return 0;
 }
 
+/*
+* Prints the length of the bulletin board
+*/
 void list_bulletin(char *bulletinFileName) {
   int messageCount = get_bulletin_length(bulletinFileName);
   printf("Current bulletin size: %i", messageCount);
-
   return;
 }
 
+/*
+* Returns the lenght of the bulletin board
+*/
 int get_bulletin_length (char *fileName) {
   FILE *bulletinFile = fopen(fileName, "r");
   if (NULL == bulletinFile) {
@@ -450,11 +482,13 @@ int get_bulletin_length (char *fileName) {
       messageCount +=1;
     }
   }
-
   fclose(bulletinFile);
   return messageCount;
 }
 
+/*
+* Creates a bulletin message in a specific format based upon the string entered and the lenght of the bulletinBoard
+*/
 char * craftBulletinMessage(char *message, int bulletinLength) {
   char *newMessage = malloc(225);
   strcpy(newMessage, "");
@@ -479,6 +513,9 @@ char * craftBulletinMessage(char *message, int bulletinLength) {
   return newMessage;
 }
 
+/*
+* User specifies that they want to exit and this function will communicate to the network thread that it needs to shutdown
+*/
 void exit_loop () {
 //  fprintf(stderr, "you want to quit, locking\n");
   pthread_mutex_lock(&quit_lock);
@@ -487,6 +524,9 @@ void exit_loop () {
   return;
 }
 
+/*
+* Returns 1 if exit_loop() has been run, 0 otherwise
+*/
 int i_want_out() {
   pthread_mutex_lock(&quit_lock);
   int returnv = QUITTER;
@@ -494,16 +534,21 @@ int i_want_out() {
   return returnv;
 }
 
-int get_ip(char * hostname , char* ip)
-{  struct hostent *he;
-   struct in_addr **addr_list;
-   int i;
-   if ( (he = gethostbyname( hostname ) ) == NULL)
-   { herror("gethostbyname");
-     return 1;}
-   addr_list = (struct in_addr **) he->h_addr_list;
-    for(i = 0; addr_list[i] != NULL; i++)
-    {   strcpy(ip , inet_ntoa(*addr_list[i]) );
-        return 0;}
+/*
+* Get IP Address of a hostname.
+*/
+int get_ip(char * hostname , char* ip) {
+  struct hostent *he;
+  struct in_addr **addr_list;
+  int i;
+  if ((he = gethostbyname(hostname)) == NULL){
+    herror("gethostbyname");
     return 1;
+  }
+  addr_list = (struct in_addr **) he->h_addr_list;
+  for(i = 0; addr_list[i] != NULL; i++) {
+    strcpy(ip , inet_ntoa(*addr_list[i]) );
+    return 0;
+  }
+  return 1;
 }
