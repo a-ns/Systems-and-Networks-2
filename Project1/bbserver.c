@@ -30,6 +30,7 @@ int MAX_CLIENTS;
 //PROTOTYPES
 void setup();
 void start();
+void craft_join_response(char *, struct sockaddr_in, int);
 
 //=============
 
@@ -72,13 +73,12 @@ void setup() {
 void start() {
   fprintf(stderr, "hostname: %s , IP: %s listening on %d\n", hostptr->h_name,  inet_ntoa(server.sin_addr), ntohs(server.sin_port));
   char buffer[500];
-  int bytesRcvd;
   struct sockaddr_in clientAddr[MAX_CLIENTS];
   socklen_t clientAddrLen = sizeof(clientAddr[0]);
   int numberOfClients = 0;
   while (numberOfClients < MAX_CLIENTS) {
     //process
-    bytesRcvd = recvfrom(listensockfd, buffer, 500, 0,(struct sockaddr *) &clientAddr[numberOfClients], &clientAddrLen);
+    recvfrom(listensockfd, buffer, 500, 0,(struct sockaddr *) &clientAddr[numberOfClients], &clientAddrLen);
     if (strcmp(buffer, JOIN) == 0) {
     	//handle join
       printf("join request\n");
@@ -94,19 +94,7 @@ void start() {
   int i;
   for(i = 0 ; i < numberOfClients - 1; ++i) {
     //go through and tell each client which new person to talk to
-    char ipAndPort[500] = "";
-
-    char port[50] = "";
-    sprintf(port, "%d", ntohs(clientAddr[i].sin_port));
-
-    strcat(ipAndPort, inet_ntoa(clientAddr[i].sin_addr));
-    strcat(ipAndPort, " ");
-    strcat(ipAndPort, port);
-    strcpy(buffer, ipAndPort);
-    strcat(ipAndPort, " ");
-    sprintf(port, "%d", i);
-    strcat(ipAndPort, port);
-    strcpy(buffer, ipAndPort);
+    craft_join_response(buffer, clientAddr[i], i);
     fprintf(stderr, "sending \"%s\"\n", buffer);
     if(sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[i+1], clientAddrLen) < 0){
       perror("sendto fail1");
@@ -114,24 +102,27 @@ void start() {
     }
   }
   //TO SEND TnO THE FIRST PERSON WHO JOINED THE INFORMATION FOR THE LAST PERSON TO JOIN
-  char ipAndPort[500] = "";
-
-  char port[50] = "";
-  sprintf(port, "%d", ntohs(clientAddr[i].sin_port));
-
-  strcat(ipAndPort, inet_ntoa(clientAddr[i].sin_addr));
-  strcat(ipAndPort, " ");
-  strcat(ipAndPort, port);
-  strcpy(buffer, ipAndPort);
-  strcat(ipAndPort, " ");
-  sprintf(port, "%d", i);
-  strcat(ipAndPort, port);
-  strcpy(buffer, ipAndPort);
+  craft_join_response(buffer, clientAddr[i], i);
   fprintf(stderr, "sending \"%s\"\n", buffer);
   if(sendto(listensockfd, buffer, 500, 0, (struct sockaddr *) &clientAddr[0], clientAddrLen)<0){
     perror("sendto fail2");
     exit(1);
   }
   //------------------------------------------------------------------------------
+  return;
+}
+
+void craft_join_response(char *message, struct sockaddr_in client, int i) {
+  char port[50] = "";
+  sprintf(port, "%d", ntohs(client.sin_port));
+  char index[10] = "";
+  sprintf(index, "%d", i);
+
+  strcpy(message, "");
+  strcat(message, inet_ntoa(client.sin_addr));
+  strcat(message, " ");
+  strcat(message, port);
+  strcat(message, " ");
+  strcat(message, index);
   return;
 }
