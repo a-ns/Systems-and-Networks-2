@@ -14,7 +14,7 @@
 /**
  * Sends a message to an RDT receiver on a specified host and port using a network simulator
  * program for transporting messages to the receiver.
- * 
+ *
  * @param localPort - the local port to bind the socket
  * @param netwHost  - the name of the host that runs the network simulator
  * @param netwPort  - the number of the port on which the network simulator listens
@@ -26,5 +26,4 @@
  */
 int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, int destPort, char* message);
 
-#endif _RDT_SEND_H
-
+#endif

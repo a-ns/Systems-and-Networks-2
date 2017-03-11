@@ -9,4 +9,4 @@ sender:
 receiver:
 	gcc -o receiver receiver.c -Wall -g
 clean:
-	rm bbserver && rm bbpeer
+	rm network && rm sender && rm receiver
