@@ -13,6 +13,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include "rdtSender.h"
+#include "definitions.h"
 
 void getMessageFromUser(char *);
 void checkCommandLineArguments(int, char**);

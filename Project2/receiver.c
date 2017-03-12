@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include "rdtReceiver.h"
+#include "definitions.h"
 
 int main (int argc, char *argv[]) {
 
