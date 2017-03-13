@@ -75,8 +75,11 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   int sockfd;
   struct hostent *hostptr;
   struct sockaddr_in network, src;
-  setup_network(&sockfd, netwhost, netwPort, desthost, destPort, &hostptr, &network, &src, localPort);
-  
+  int err;
+  if ((err = setup_network(&sockfd, netwhost, netwPort, desthost, destPort, &hostptr, &network, &src, localPort)) < 0) {
+    return err;
+  }
+  sendto(sockfd, message, PACKET_LENGTH, 0, (struct sockaddr *) &network, sizeof(network));
 
 
   return 0;

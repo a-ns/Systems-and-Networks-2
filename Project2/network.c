@@ -32,6 +32,12 @@ int main (int argc, char *argv[]) {
   char hostname[100];
   initialize_network(&sockfd, &network, &hostptr, hostname, &ME_PORT);
 
+  char message[500];
+  struct sockaddr_in peer;
+  socklen_t peerAddrLen = sizeof(peer);
+  
+  recvfrom(sockfd, message, 54, 0, (struct sockaddr *) &peer, &peerAddrLen);
+  printf("\n Got message: %s\n", message);
 
 
   return 0;
