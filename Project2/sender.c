@@ -18,6 +18,7 @@
 void getMessageFromUser(char *);
 void checkCommandLineArguments(int, char**);
 int setup_network (int* , char *, int , char *, int , struct hostent** , struct sockaddr_in * , struct sockaddr_in * , int);
+
 int main (int argc, char *argv[]) {
 
   checkCommandLineArguments(argc, argv);
@@ -69,6 +70,7 @@ return 0;
 void getMessageFromUser(char *buffer) {
   printf("Enter the message to send: ");
   fgets(buffer, 500, stdin);
+  buffer[strlen(buffer) -1] = '\0';
   return;
 }
 
@@ -80,46 +82,41 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   if ((err = setup_network(&sockfd, netwhost, netwPort, desthost, destPort, &hostptr, &network, &src, localPort)) < 0) {
     return err;
   }
-
-
   char srcHost[100];
   gethostname(srcHost, 100);
   struct sockaddr_in tmpSockAddr;
   memcpy((void *) &(tmpSockAddr.sin_addr), (void *) (hostptr)->h_addr, (*hostptr).h_length);
   strcpy(srcHost, inet_ntoa(tmpSockAddr.sin_addr));
-  while (strlen(srcHost) != 15) {
-    //pad spaces
-    strcat(srcHost, " ");
-  }
-  printf("\n\n%s\n\n", srcHost);
-  char segment[54];
+  char segment[PACKET_LENGTH];
+  memset(segment, '\0', PACKET_LENGTH);
+
   char localPortStr[10];
   sprintf(localPortStr, "%d", localPort);
-
   char destPortStr[10];
   sprintf(destPortStr, "%d", destPort);
-  strcpy(segment, srcHost);
-  strcat(segment, "|");
-  strcat(segment, localPortStr);
-  strcat(segment, "|");
-  strcat(segment, desthost);
-  int i = strlen(desthost);
-  while (i != 15) {
-    //pad spaces
-    strcat(segment, " ");
-    i++;
-  }
-  strcat(segment, "|");
-  strcat(segment, destPortStr);
-  strcat(segment, "|");
-  strcat(segment, message);
-  while(strlen(segment) != PACKET_LENGTH){
-    strcat(segment, " ");
-  }
 
-  printf("Sending packet \"%s\", length = %lu\n", segment, strlen(segment));
+  strcpy(segment, srcHost);
+  strcpy(segment + 16, localPortStr);
+  strcpy(segment + 22, desthost);
+  strcpy(segment + 38, destPortStr);
+  strcpy(segment + 44, message );
+  segment[PACKET_LENGTH-1] = '\0';
+
+  print_packet(segment);
   sendto(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *) &network, sizeof(network));
 
 
   return 0;
+}
+
+void print_packet (char * packet) {
+  int i = 0;
+  while(i < 54) {
+    if(packet[i])
+      putchar(packet[i]);
+    else {
+      putchar(' ');
+    }
+    i++;
+  }
 }

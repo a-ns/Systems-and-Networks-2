@@ -38,16 +38,17 @@ int main (int argc, char *argv[]) {
 
 
   //TODO put into its own function everything below
-  char segment[54];
+  char segment[PACKET_LENGTH];
+  memset(segment, 0, PACKET_LENGTH);
   struct sockaddr_in peer;
   socklen_t peerAddrLen = sizeof(peer);
 
   recvfrom(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *) &peer, &peerAddrLen);
-  printf("\n Got message: %s\n", segment);
 
+  char segmentCopy[PACKET_LENGTH];
+  memset(segmentCopy, '\0', PACKET_LENGTH);
+  memcpy(segmentCopy, segment, PACKET_LENGTH);
 
-  char segmentCopy[54];
-  strcpy(segmentCopy, segment);
   char* srcIP;
   char* srcPortStr;
   int srcPort;
@@ -56,15 +57,23 @@ int main (int argc, char *argv[]) {
   int destPort;
 
   char* message;
-
-  srcIP = strtok(segmentCopy, "|");
-  srcPortStr = strtok(NULL, "|");
-  destIP = strtok(NULL, "|");
-  destPortStr = strtok(NULL, "|");
+  srcIP = segmentCopy;
+  srcPortStr = segmentCopy + 16;
+  destIP = srcPortStr + 6;
+  destPortStr = destIP + 16;
   message = destPortStr + 6;
 
   srcPort = atoi(srcPortStr);
   destPort = atoi(destPortStr);
+
+  printf("\nsrcIP: %s\n", srcIP);
+  printf("srcPort: %d\n", srcPort);
+  printf("srcPortStr: %s\n", srcPortStr);
+  printf("destIP: %s\n", destIP);
+  printf("destPort: %d\n", destPort);
+  printf("destPortStr: %s\n", destPortStr);
+  printf("message: %s\n", message);
+
   forward_packet(segment, srcIP, srcPort, destIP, destPort, message, sockfd);
 
 
@@ -115,4 +124,16 @@ int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int 
 
   sendto(sockfd, wholeData, PACKET_LENGTH, 0, (struct sockaddr *) &dest, sizeof(dest));
   return 1;
+}
+
+void print_packet (char * packet) {
+  int i = 0;
+  while(i < 54) {
+    if(packet[i])
+      putchar(packet[i]);
+    else {
+      putchar(' ');
+    }
+    i++;
+  }
 }

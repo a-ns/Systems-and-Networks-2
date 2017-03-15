@@ -36,7 +36,7 @@ int main (int argc, char *argv[]) {
   char segment[PACKET_LENGTH];
 
   recvfrom(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *)&src, &src_length);
-  printf("Got packet: \"%s\"\n", segment);
+  print_packet(segment);
   //now respond
 
   return 0;
@@ -68,4 +68,16 @@ void initialize_network(int *sockfd, struct sockaddr_in *src, struct hostent** h
     exit(1);
   }
   fprintf(stderr, "\nWe are listening on: %s:%d\n", inet_ntoa(src->sin_addr), ntohs(src->sin_port));
+}
+
+void print_packet (char * packet) {
+  int i = 0;
+  while(i < 54) {
+    if(packet[i])
+      putchar(packet[i]);
+    else {
+      putchar(' ');
+    }
+    i++;
+  }
 }
