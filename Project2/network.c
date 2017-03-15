@@ -16,6 +16,9 @@
 
 void initialize_from_args(int, char **, int *, double *, double *, double *);
 void initialize_network(int *, struct sockaddr_in *, struct hostent** , char *, int *);
+
+int forward_packet(char *, char *, int, char *, int, char *, int);
+
 int main (int argc, char *argv[]) {
 
   /* parse the command line arguments */
@@ -31,13 +34,38 @@ int main (int argc, char *argv[]) {
   struct hostent *hostptr;
   char hostname[100];
   initialize_network(&sockfd, &network, &hostptr, hostname, &ME_PORT);
+  fprintf(stderr, "\nWe are listening on: %s:%d\n", inet_ntoa(network.sin_addr), ntohs(network.sin_port));
 
-  char message[500];
+
+  //TODO put into its own function everything below
+  char segment[54];
   struct sockaddr_in peer;
   socklen_t peerAddrLen = sizeof(peer);
-  
-  recvfrom(sockfd, message, 54, 0, (struct sockaddr *) &peer, &peerAddrLen);
-  printf("\n Got message: %s\n", message);
+
+  recvfrom(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *) &peer, &peerAddrLen);
+  printf("\n Got message: %s\n", segment);
+
+
+  char segmentCopy[54];
+  strcpy(segmentCopy, segment);
+  char* srcIP;
+  char* srcPortStr;
+  int srcPort;
+  char* destIP;
+  char* destPortStr;
+  int destPort;
+
+  char* message;
+
+  srcIP = strtok(segmentCopy, "|");
+  srcPortStr = strtok(NULL, "|");
+  destIP = strtok(NULL, "|");
+  destPortStr = strtok(NULL, "|");
+  message = destPortStr + 6;
+
+  srcPort = atoi(srcPortStr);
+  destPort = atoi(destPortStr);
+  forward_packet(segment, srcIP, srcPort, destIP, destPort, message, sockfd);
 
 
   return 0;
@@ -71,11 +99,20 @@ void initialize_network(int *sockfd, struct sockaddr_in *network, struct hostent
     perror("bind");
     exit(1);
   }
-  fprintf(stderr, "\nWe are listening on: %s:%d\n", inet_ntoa(network->sin_addr), ntohs(network->sin_port));
 
+}
 
+/*
+* @params wholeData is the packet received in its entirety of char[54] "srcIPsrcPortdestIPdestPortSegment"
+*/
+int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int destPort, char *segment,int sockfd) {
+  struct sockaddr_in dest;
 
+  memset(&dest, 0, sizeof(dest));
+  dest.sin_family = AF_INET;
+  dest.sin_port = htons(destPort);
+  inet_aton(destIP, &dest.sin_addr);
 
-
-
+  sendto(sockfd, wholeData, PACKET_LENGTH, 0, (struct sockaddr *) &dest, sizeof(dest));
+  return 1;
 }

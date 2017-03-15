@@ -28,11 +28,16 @@ int main (int argc, char *argv[]) {
   /* setup the network */
   int sockfd;
   struct sockaddr_in src;
+  socklen_t src_length = sizeof(src);
   struct hostent *hostptr;
   char hostname[100];
   initialize_network(&sockfd, &src, &hostptr, hostname, &ME_PORT);
+  //TODO put into its own function everything below
+  char segment[PACKET_LENGTH];
 
-
+  recvfrom(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *)&src, &src_length);
+  printf("Got packet: \"%s\"\n", segment);
+  //now respond
 
   return 0;
 }

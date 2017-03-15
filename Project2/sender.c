@@ -19,6 +19,7 @@ void getMessageFromUser(char *);
 void checkCommandLineArguments(int, char**);
 int setup_network (int* , char *, int , char *, int , struct hostent** , struct sockaddr_in * , struct sockaddr_in * , int);
 int main (int argc, char *argv[]) {
+
   checkCommandLineArguments(argc, argv);
   char messageToSend[500];
   getMessageFromUser(messageToSend);
@@ -79,7 +80,45 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   if ((err = setup_network(&sockfd, netwhost, netwPort, desthost, destPort, &hostptr, &network, &src, localPort)) < 0) {
     return err;
   }
-  sendto(sockfd, message, PACKET_LENGTH, 0, (struct sockaddr *) &network, sizeof(network));
+
+
+  char srcHost[100];
+  gethostname(srcHost, 100);
+  struct sockaddr_in tmpSockAddr;
+  memcpy((void *) &(tmpSockAddr.sin_addr), (void *) (hostptr)->h_addr, (*hostptr).h_length);
+  strcpy(srcHost, inet_ntoa(tmpSockAddr.sin_addr));
+  while (strlen(srcHost) != 15) {
+    //pad spaces
+    strcat(srcHost, " ");
+  }
+  printf("\n\n%s\n\n", srcHost);
+  char segment[54];
+  char localPortStr[10];
+  sprintf(localPortStr, "%d", localPort);
+
+  char destPortStr[10];
+  sprintf(destPortStr, "%d", destPort);
+  strcpy(segment, srcHost);
+  strcat(segment, "|");
+  strcat(segment, localPortStr);
+  strcat(segment, "|");
+  strcat(segment, desthost);
+  int i = strlen(desthost);
+  while (i != 15) {
+    //pad spaces
+    strcat(segment, " ");
+    i++;
+  }
+  strcat(segment, "|");
+  strcat(segment, destPortStr);
+  strcat(segment, "|");
+  strcat(segment, message);
+  while(strlen(segment) != PACKET_LENGTH){
+    strcat(segment, " ");
+  }
+
+  printf("Sending packet \"%s\", length = %lu\n", segment, strlen(segment));
+  sendto(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *) &network, sizeof(network));
 
 
   return 0;
