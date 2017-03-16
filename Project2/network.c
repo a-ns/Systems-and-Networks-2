@@ -14,18 +14,18 @@
 #include <arpa/inet.h>
 #include "definitions.h"
 
-void initialize_from_args(int, char **, int *, double *, double *, double *);
+void initialize_from_args(int, char **, int *, int *, int *, int *);
 void initialize_network(int *, struct sockaddr_in *, struct hostent** , char *, int *);
-
-int forward_packet(char *, char *, int, char *, int, char *, int);
+int rand_int(int, int);
+int forward_packet(char *, char *, int, char *, int, char *, int, int, int, int);
 
 int main (int argc, char *argv[]) {
 
   /* parse the command line arguments */
   int ME_PORT;
-  double lostPercent;
-  double delayedPercent;
-  double errorPercent;
+  int lostPercent;
+  int delayedPercent;
+  int errorPercent;
   initialize_from_args(argc, argv, &ME_PORT, &lostPercent, &delayedPercent, &errorPercent);
 
   /* setup the network */
@@ -74,21 +74,21 @@ int main (int argc, char *argv[]) {
   printf("destPortStr: %s\n", destPortStr);
   printf("message: %s\n", message);
 
-  forward_packet(segment, srcIP, srcPort, destIP, destPort, message, sockfd);
+  forward_packet(segment, srcIP, srcPort, destIP, destPort, message, sockfd, lostPercent, delayedPercent, errorPercent);
 
 
   return 0;
 }
 
-void initialize_from_args(int argc, char **argv, int *ME_PORT, double *lostPercent, double *delayedPercent, double *errorPercent){
+void initialize_from_args(int argc, char **argv, int *ME_PORT, int *lostPercent, int *delayedPercent, int *errorPercent){
   if (argc != 5) {
     fprintf(stderr, "Usage: network port lostPercent delayedPercent errorPercent\n");
     exit(1);
   }
   *ME_PORT = atoi(argv[1]);
-  *lostPercent = atof(argv[2]);
-  *delayedPercent = atof(argv[3]);
-  *errorPercent = atof(argv[4]);
+  *lostPercent = atoi(argv[2]);
+  *delayedPercent = atoi(argv[3]);
+  *errorPercent = atoi(argv[4]);
   return;
 }
 
@@ -114,13 +114,25 @@ void initialize_network(int *sockfd, struct sockaddr_in *network, struct hostent
 /*
 * @params wholeData is the packet received in its entirety of char[54] "srcIPsrcPortdestIPdestPortSegment"
 */
-int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int destPort, char *segment,int sockfd) {
+int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int destPort, char *segment,int sockfd, int lostPercent, int delayedPercent, int errorPercent) {
+
   struct sockaddr_in dest;
 
   memset(&dest, 0, sizeof(dest));
   dest.sin_family = AF_INET;
   dest.sin_port = htons(destPort);
   inet_aton(destIP, &dest.sin_addr);
+
+
+    if ( rand_int(lostPercent, 0) < lostPercent) {
+      return 1;
+    }
+    if ( rand_int(errorPercent, 0) < errorPercent) {
+      //increment checksum
+    }
+    if( rand_int(delayedPercent, 0) < delayedPercent) {
+      //wait a bit
+    }
 
   sendto(sockfd, wholeData, PACKET_LENGTH, 0, (struct sockaddr *) &dest, sizeof(dest));
   return 1;
@@ -136,4 +148,8 @@ void print_packet (char * packet) {
     }
     i++;
   }
+}
+
+int rand_int (int max_number, int minimum_number) {
+  return rand() % (max_number + 1 - minimum_number) + minimum_number;
 }
