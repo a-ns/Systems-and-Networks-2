@@ -87,38 +87,77 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   struct sockaddr_in tmpSockAddr;
   memcpy((void *) &(tmpSockAddr.sin_addr), (void *) (hostptr)->h_addr, (*hostptr).h_length);
   strcpy(srcHost, inet_ntoa(tmpSockAddr.sin_addr));
-  char segment[PACKET_LENGTH];
-  memset(segment, '\0', PACKET_LENGTH);
+  char packet[PACKET_LENGTH];
+  memset(packet, '\0', PACKET_LENGTH);
 
   char localPortStr[10];
   sprintf(localPortStr, "%d", localPort);
   char destPortStr[10];
   sprintf(destPortStr, "%d", destPort);
 
-  strcpy(segment, srcHost);
-  strcpy(segment + 16, localPortStr);
-  strcpy(segment + 22, desthost);
-  strcpy(segment + 38, destPortStr);
+  strcpy(packet, srcHost);
+  strcpy(packet + 16, localPortStr);
+  strcpy(packet + 22, desthost);
+  strcpy(packet + 38, destPortStr);
 
   //start breaking up message into groups of 4 chars, enter rdt3.0 stuff
   //testing
-  if(strlen(message) > 4){
-    message[5] = '\0';
+  int segmentsRequired = (strlen(message) + 4 - 1) / 4;
+  char segments[segmentsRequired][5];
+
+  int k = 0;
+  int i = 0;
+  while (i < segmentsRequired){
+    int j = 0;
+    while (j < 4){
+      segments[i][j] = message[k];
+      j++;
+      k++;
+    }
+    i++;
   }
 
-  memset(segment + 44, ACK, 1);
-  memset(segment + 45, '0', 1);
-  strcpy(segment + 46, message );
-  int chksum = checksum((segment + 44), 6);
-  char chksumStr[5];
-  sprintf(chksumStr, "%d", chksum);
-  printf("chksumStr: %s\n", chksumStr);
+  //segments now contains each of the strings that needs to be sent to the receiver one by one
+  i = 0;
+  char seq = '0';
+  while (i < segmentsRequired) {
+    int ack_received = 0;
+    while (!ack_received) {
+      //make packet with current segments[i] and send it
+      memset(packet + 44, SYN, 1);
+      memset(packet + 45, seq, 1);
+      strcpy(packet + 46, segments[i]);
+      int chksum = checksum((packet + 44), 6);
+      char chksumStr[5];
+      sprintf(chksumStr, "%d", chksum);
+      memcpy(packet + 50, chksumStr, 4);
 
-  memcpy(segment + 50, chksumStr, 4);
+      sendto(sockfd, packet, PACKET_LENGTH, 0, (struct sockaddr *) &network, sizeof(network));
+      memset(packet + 46, '\0', 8);
+      /*if timeout {
+        //do nothing and renter the loop
+      }
+      else {
+        //recvfrom
+
+        if (packet is good checksum and packet is right sequence number) {
+          ack_received = 1;
+        }
+      }
+      */
+      i++;
+    }
+    if (seq == '0' )
+      seq = '1';
+    else seq = '0';
+  }
+
+
+
+
   //end testing
 
-  print_packet(segment);
-  sendto(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *) &network, sizeof(network));
+  //print_packet(packet);
 
 
   return 0;
