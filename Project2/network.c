@@ -125,10 +125,13 @@ int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int 
 
 
     if ( rand_int(lostPercent, 0) < lostPercent) {
+      printf("Packet dropped\n");
       return 1;
     }
     if ( rand_int(errorPercent, 0) < errorPercent) {
-      //increment checksum
+      printf("Corrupting packet\n");
+      //increment checksum by one
+      wholeData[53]++;
     }
     if( rand_int(delayedPercent, 0) < delayedPercent) {
       //wait a bit

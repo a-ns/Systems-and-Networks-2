@@ -99,8 +99,23 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   strcpy(segment + 16, localPortStr);
   strcpy(segment + 22, desthost);
   strcpy(segment + 38, destPortStr);
-  strcpy(segment + 44, message );
-  segment[PACKET_LENGTH-1] = '\0';
+
+  //start breaking up message into groups of 4 chars, enter rdt3.0 stuff
+  //testing
+  if(strlen(message) > 4){
+    message[5] = '\0';
+  }
+
+  memset(segment + 44, ACK, 1);
+  memset(segment + 45, '0', 1);
+  strcpy(segment + 46, message );
+  int chksum = checksum((segment + 44), 6);
+  char chksumStr[5];
+  sprintf(chksumStr, "%d", chksum);
+  printf("chksumStr: %s\n", chksumStr);
+
+  memcpy(segment + 50, chksumStr, 4);
+  //end testing
 
   print_packet(segment);
   sendto(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *) &network, sizeof(network));
