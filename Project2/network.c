@@ -67,24 +67,16 @@ int main (int argc, char *argv[]) {
 
     srcPort = atoi(srcPortStr);
     destPort = atoi(destPortStr);
-/*
-    printf("\nsrcIP: %s\n", srcIP);
-    printf("srcPort: %d\n", srcPort);
-    printf("srcPortStr: %s\n", srcPortStr);
-    printf("destIP: %s\n", destIP);
-    printf("destPort: %d\n", destPort);
-    printf("destPortStr: %s\n", destPortStr);
-    printf("message: %s\n", message);
-    */
     print_packet(segment);
-
-
     forward_packet(segment, srcIP, srcPort, destIP, destPort, message, sockfd, lostPercent, delayedPercent, errorPercent);
   }
 
   return 0;
 }
 
+/*
+* Parse the command line arguments and store them in the locations dictated by the passed in pointers.
+*/
 void initialize_from_args(int argc, char **argv, int *ME_PORT, int *lostPercent, int *delayedPercent, int *errorPercent){
   if (argc != 5) {
     fprintf(stderr, "Usage: network port lostPercent delayedPercent errorPercent\n");
@@ -97,6 +89,10 @@ void initialize_from_args(int argc, char **argv, int *ME_PORT, int *lostPercent,
   return;
 }
 
+/*
+* Sets up the network parameters. Binds the port.
+* @params sockfd - where to store the socket, network - where to store the sockaddr info, hostptr - where to store the host info, hostname - where to store the hostname, ME_PORT - the port to bind to
+*/
 void initialize_network(int *sockfd, struct sockaddr_in *network, struct hostent** hostptr, char *hostname, int *ME_PORT){
   gethostname(hostname, 100);
   *hostptr = gethostbyname(hostname);
@@ -115,13 +111,42 @@ void initialize_network(int *sockfd, struct sockaddr_in *network, struct hostent
   }
 
 }
+
+
+/*
+* This function is needed because a printf statement on our packets don't work since there are null characters in them. This function will print PACKET_LENGTH bytes.
+* @params char * packet - the packet to be printed
+*/
+void print_packet (char * packet) {
+  int i = 0;
+  while(i < PACKET_LENGTH) {
+    if(packet[i])
+      putchar(packet[i]);
+    else {
+      putchar(' ');
+    }
+    i++;
+  }
+  printf("\n");
+}
+
+/*
+* Get a random integer in a range. This assumes that rand() has an even distribution for its random numbers that it returns.
+* @params int max_number - max number in range, int minimum_number - minimum number in range
+*/
+int rand_int (int max_number, int minimum_number) {
+  return rand() % (max_number + 1 - minimum_number) + minimum_number;
+}
+
+
+// need this struct to pass to encapsulate the data to send it as one chunk to the delay/sleep thread.
 struct data {
   char *data;
   struct sockaddr_in *dest;
   int sockfd;
 };
 /*
-* @params wholeData is the packet received in its entirety of char[54] "srcIPsrcPortdestIPdestPortSegment"
+* @params wholeData is the packet received in its entirety of char[PACKET_LENGTH] "srcIPsrcPortdestIPdestPortSegment"
 */
 int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int destPort, char *segment,int sockfd, int lostPercent, int delayedPercent, int errorPercent) {
 
@@ -133,16 +158,16 @@ int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int 
   inet_aton(destIP, &dest.sin_addr);
 
 
-    if ( rand_int(100, 0) < lostPercent) {
+    if ( rand_int(100, 0) < lostPercent) { //if the packet is lost, just return and receiver the next packet
       printf("Packet dropped\n");
       return 1;
     }
-    if ( rand_int(100, 0) < errorPercent) {
+    if ( rand_int(100, 0) < errorPercent) { // increment the checksum by one
       printf("Corrupting packet\n");
       //increment checksum by one
       wholeData[53]++;
     }
-    if( rand_int(100, 0) < delayedPercent) {
+    if( rand_int(100, 0) < delayedPercent) { //send the packet to another thread, sleep, then send it. on main thread, just return and process next packet
       //wait a bit
       printf("Packet delay\n");
       char copy[PACKET_LENGTH];
@@ -159,29 +184,18 @@ int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int 
       return 1;
     }
 
-  sendto(sockfd, wholeData, PACKET_LENGTH, 0, (struct sockaddr *) &dest, sizeof(dest));
+  sendto(sockfd, wholeData, PACKET_LENGTH, 0, (struct sockaddr *) &dest, sizeof(dest)); // this will get called if the packet was only supposed to be delayed
   return 1;
 }
+
+/*
+* This function is needed when a packet is meant to be delayed. Just calling sleep without a new thread will block new packets. This will put the delayed packet on a new thread
+* while still continuing to accept new packets on the other thread.
+* @params void * stuff - this is an inline struct data * that has the data to be sent, the socket to send on, and the struct sockaddr to send to.
+*/
 void * sleepy_thread(void *stuff) {
   struct data * tmp = (struct data *) stuff;
   sleep(rand_int(2, 1));
   sendto(tmp->sockfd, tmp->data, PACKET_LENGTH, 0, (struct sockaddr *) &(tmp->dest), sizeof(tmp->dest));
   return NULL;
-}
-
-void print_packet (char * packet) {
-  int i = 0;
-  while(i < 54) {
-    if(packet[i])
-      putchar(packet[i]);
-    else {
-      putchar(' ');
-    }
-    i++;
-  }
-  printf("\n");
-}
-
-int rand_int (int max_number, int minimum_number) {
-  return rand() % (max_number + 1 - minimum_number) + minimum_number;
 }

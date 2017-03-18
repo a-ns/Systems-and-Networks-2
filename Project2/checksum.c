@@ -7,11 +7,8 @@ int checksum (char *data, int length){
   int i;
   for(i = 0; i < length; i++){
     sum += ((int)*data)%(i+50);
-  //  printf("%i ", *data);
     data++;
   }
-
-  //printf("\nchecksum: %i\n", sum);
   if (sum < 0)
     sum = sum * -1;
   return sum;

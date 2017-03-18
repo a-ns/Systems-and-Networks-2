@@ -45,7 +45,6 @@ int main (int argc, char *argv[]) {
     }
     else {
       //now respond
-    //  print_message(packet + 45);
       int packetChecksum = atoi(packet + 50);
       char packetSeq = packet[45];
       if(checksum((packet + 44), 6) == packetChecksum && packetSeq == seq) {
@@ -124,7 +123,7 @@ void initialize_network(int *sockfd, struct sockaddr_in *src, struct hostent** h
 
 void print_packet (char * packet) {
   int i = 0;
-  while(i < 54) {
+  while(i < PACKET_LENGTH) {
     if(packet[i])
       putchar(packet[i]);
     else {

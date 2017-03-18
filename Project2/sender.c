@@ -102,7 +102,6 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   //testing
   int segmentsRequired = (strlen(message) + 4 - 1) / 4;
   char segments[segmentsRequired][5];
-
   int k = 0;
   int i = 0;
   while (i < segmentsRequired){
@@ -113,7 +112,7 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
       j++;
       k++;
     }
-    printf("Segment%i: %s\n", i , segments[i]);
+    //printf("Segment%i: %s\n", i , segments[i]);
     i++;
   }
 
@@ -121,10 +120,8 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   i = 0;
   char seq = '0';
   while (i < segmentsRequired) {
-
-
     int ack_received = 0;
-
+    //create the packet
     memset(packet + 44, SYN, 1);
     memset(packet + 45, seq, 1);
     memset(packet + 46, '\0', 9);
@@ -142,12 +139,12 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
       char response[PACKET_LENGTH];
       struct sockaddr_in peer;
       int len = PACKET_LENGTH;
-      if(timeout_recvfrom(sockfd, response, &len, &peer, 3)) {
+      if(timeout_recvfrom(sockfd, response, &len, &peer, 1)) {
         //printf("Received: "); print_packet(response); printf("\n");
-        int responseChecksum = atoi(response+50);
-        char ack_response = response[45];
-        if(checksum(response + 44, 6) == responseChecksum && ack_response == seq){
-          ack_received = 1;
+        int responseChecksum = atoi(response+50); // extract the checksum from the packet
+        char ack_response = response[45]; // extract the seq number
+        if(checksum(response + 44, 6) == responseChecksum && ack_response == seq){ //the packet is not corrupt and is the right sequence
+          ack_received = 1; // move on to the next segment to send
         }
         else {
           printf("Received corrupt or out of sequence.\n");
@@ -157,8 +154,8 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
         printf("Timeout\n");
       }
     }
-    i++;
-    if (seq == '0' )
+    i++; // increment the segments array to now send a packet with the next segment
+    if (seq == '0' ) // flip the sequence number. it would be better if this were an int because then we could just flip it, but it needs to be only 1 byte
       seq = '1';
     else seq = '0';
     memset(packet + 46, '\0', 8);// fill message and checksum with zeroes for reuse
