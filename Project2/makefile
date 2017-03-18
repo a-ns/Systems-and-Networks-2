@@ -7,6 +7,6 @@ sender:
 	gcc -o sender sender.c checksum.c -Wall -g
 
 receiver:
-	gcc -o receiver receiver.c checksum.c -Wall -g
+	gcc -o receiver receiver.c checksum.c -Wall -g -lpthread
 clean:
 	rm network && rm sender && rm receiver

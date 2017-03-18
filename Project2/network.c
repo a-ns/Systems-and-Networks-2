@@ -12,11 +12,13 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 #include "definitions.h"
 
 void initialize_from_args(int, char **, int *, int *, int *, int *);
 void initialize_network(int *, struct sockaddr_in *, struct hostent** , char *, int *);
 int rand_int(int, int);
+void * sleepy_thread(void *);
 int forward_packet(char *, char *, int, char *, int, char *, int, int, int, int);
 
 int main (int argc, char *argv[]) {
@@ -113,7 +115,11 @@ void initialize_network(int *sockfd, struct sockaddr_in *network, struct hostent
   }
 
 }
-
+struct data {
+  char *data;
+  struct sockaddr_in *dest;
+  int sockfd;
+};
 /*
 * @params wholeData is the packet received in its entirety of char[54] "srcIPsrcPortdestIPdestPortSegment"
 */
@@ -139,11 +145,28 @@ int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int 
     if( rand_int(100, 0) < delayedPercent) {
       //wait a bit
       printf("Packet delay\n");
-      sleep(rand_int(4, 0));
+      char copy[PACKET_LENGTH];
+      memcpy(copy, wholeData, PACKET_LENGTH);
+      pthread_t sleep_thread;
+
+      struct data thread_data;
+      memset(&thread_data, 0, sizeof(thread_data));
+      thread_data.data = copy;
+      thread_data.sockfd = sockfd;
+      thread_data.dest = &dest;
+      pthread_create(&sleep_thread, NULL, sleepy_thread, &thread_data);
+
+      return 1;
     }
 
   sendto(sockfd, wholeData, PACKET_LENGTH, 0, (struct sockaddr *) &dest, sizeof(dest));
   return 1;
+}
+void * sleepy_thread(void *stuff) {
+  struct data * tmp = (struct data *) stuff;
+  sleep(rand_int(2, 1));
+  sendto(tmp->sockfd, tmp->data, PACKET_LENGTH, 0, (struct sockaddr *) &(tmp->dest), sizeof(tmp->dest));
+  return NULL;
 }
 
 void print_packet (char * packet) {
