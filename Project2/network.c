@@ -36,46 +36,49 @@ int main (int argc, char *argv[]) {
   initialize_network(&sockfd, &network, &hostptr, hostname, &ME_PORT);
   fprintf(stderr, "\nWe are listening on: %s:%d\n", inet_ntoa(network.sin_addr), ntohs(network.sin_port));
 
+  while(1) {
+    //TODO put into its own function everything below
+    char segment[PACKET_LENGTH];
+    memset(segment, 0, PACKET_LENGTH);
+    struct sockaddr_in peer;
+    socklen_t peerAddrLen = sizeof(peer);
 
-  //TODO put into its own function everything below
-  char segment[PACKET_LENGTH];
-  memset(segment, 0, PACKET_LENGTH);
-  struct sockaddr_in peer;
-  socklen_t peerAddrLen = sizeof(peer);
+    recvfrom(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *) &peer, &peerAddrLen);
 
-  recvfrom(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *) &peer, &peerAddrLen);
+    char segmentCopy[PACKET_LENGTH];
+    memset(segmentCopy, '\0', PACKET_LENGTH);
+    memcpy(segmentCopy, segment, PACKET_LENGTH);
 
-  char segmentCopy[PACKET_LENGTH];
-  memset(segmentCopy, '\0', PACKET_LENGTH);
-  memcpy(segmentCopy, segment, PACKET_LENGTH);
+    char* srcIP;
+    char* srcPortStr;
+    int srcPort;
+    char* destIP;
+    char* destPortStr;
+    int destPort;
 
-  char* srcIP;
-  char* srcPortStr;
-  int srcPort;
-  char* destIP;
-  char* destPortStr;
-  int destPort;
+    char* message;
+    srcIP = segmentCopy;
+    srcPortStr = segmentCopy + 16;
+    destIP = srcPortStr + 6;
+    destPortStr = destIP + 16;
+    message = destPortStr + 6;
 
-  char* message;
-  srcIP = segmentCopy;
-  srcPortStr = segmentCopy + 16;
-  destIP = srcPortStr + 6;
-  destPortStr = destIP + 16;
-  message = destPortStr + 6;
+    srcPort = atoi(srcPortStr);
+    destPort = atoi(destPortStr);
+/*
+    printf("\nsrcIP: %s\n", srcIP);
+    printf("srcPort: %d\n", srcPort);
+    printf("srcPortStr: %s\n", srcPortStr);
+    printf("destIP: %s\n", destIP);
+    printf("destPort: %d\n", destPort);
+    printf("destPortStr: %s\n", destPortStr);
+    printf("message: %s\n", message);
+    */
+    print_packet(segment);
 
-  srcPort = atoi(srcPortStr);
-  destPort = atoi(destPortStr);
 
-  printf("\nsrcIP: %s\n", srcIP);
-  printf("srcPort: %d\n", srcPort);
-  printf("srcPortStr: %s\n", srcPortStr);
-  printf("destIP: %s\n", destIP);
-  printf("destPort: %d\n", destPort);
-  printf("destPortStr: %s\n", destPortStr);
-  printf("message: %s\n", message);
-
-  forward_packet(segment, srcIP, srcPort, destIP, destPort, message, sockfd, lostPercent, delayedPercent, errorPercent);
-
+    forward_packet(segment, srcIP, srcPort, destIP, destPort, message, sockfd, lostPercent, delayedPercent, errorPercent);
+  }
 
   return 0;
 }
@@ -124,17 +127,19 @@ int forward_packet(char *wholeData, char *srcIP, int srcPort, char *destIP, int 
   inet_aton(destIP, &dest.sin_addr);
 
 
-    if ( rand_int(lostPercent, 0) < lostPercent) {
+    if ( rand_int(100, 0) < lostPercent) {
       printf("Packet dropped\n");
       return 1;
     }
-    if ( rand_int(errorPercent, 0) < errorPercent) {
+    if ( rand_int(100, 0) < errorPercent) {
       printf("Corrupting packet\n");
       //increment checksum by one
       wholeData[53]++;
     }
-    if( rand_int(delayedPercent, 0) < delayedPercent) {
+    if( rand_int(100, 0) < delayedPercent) {
       //wait a bit
+      printf("Packet delay\n");
+      sleep(rand_int(4, 0));
     }
 
   sendto(sockfd, wholeData, PACKET_LENGTH, 0, (struct sockaddr *) &dest, sizeof(dest));
@@ -151,6 +156,7 @@ void print_packet (char * packet) {
     }
     i++;
   }
+  printf("\n");
 }
 
 int rand_int (int max_number, int minimum_number) {

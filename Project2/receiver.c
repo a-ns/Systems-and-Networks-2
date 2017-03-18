@@ -18,6 +18,7 @@
 #include "definitions.h"
 
 void initialize_from_args(int, char **, int *);
+void print_message(char *);
 void initialize_network(int *, struct sockaddr_in *, struct hostent** , char *, int *);
 int main (int argc, char *argv[]) {
 
@@ -33,12 +34,63 @@ int main (int argc, char *argv[]) {
   char hostname[100];
   initialize_network(&sockfd, &src, &hostptr, hostname, &ME_PORT);
   //TODO put into its own function everything below
-  char segment[PACKET_LENGTH];
 
-  recvfrom(sockfd, segment, PACKET_LENGTH, 0, (struct sockaddr *)&src, &src_length);
-  print_packet(segment);
-  //now respond
+  char seq = '0';
+  while(1) {
+    char packet[PACKET_LENGTH];
+    memset(packet, '\0', PACKET_LENGTH);
+    recvfrom(sockfd, packet, PACKET_LENGTH, 0, (struct sockaddr *)&src, &src_length);
+    if(packet[44] == 'F') {
+      seq = '0';
+    }
+    else {
+      //now respond
+    //  print_message(packet + 45);
+      int packetChecksum = atoi(packet + 50);
+      char packetSeq = packet[45];
+      if(checksum((packet + 44), 6) == packetChecksum && packetSeq == seq) {
+        print_message(packet);
+        char packetCopy[PACKET_LENGTH];
+        memset(packetCopy, '\0', PACKET_LENGTH);
+        memcpy(packetCopy, packet, PACKET_LENGTH);
+        memcpy(packetCopy, packetCopy + 22, 22);
+        memcpy(packetCopy + 22, packet, 22);
+        memset(packetCopy + 44, ACK, 1);
+        memset(packetCopy + 45, seq, 1);
+        char chksumStr[5];
+        sprintf(chksumStr, "%d", checksum(packetCopy+44, 6));
+        memcpy(packetCopy + 50, chksumStr, 4);
 
+        //print_packet(packetCopy);
+        //printf("Sending to: %s:%d", inet_ntoa(src.sin_addr), ntohs(src.sin_port));
+        if(sendto(sockfd, packetCopy, PACKET_LENGTH, 0 , (struct sockaddr *) &src, src_length) <0 ){
+          perror("sendto fail");
+          exit(1);
+        }
+        if (seq == '0' )
+          seq = '1';
+        else seq = '0';
+      }
+      else {
+        if(checksum((packet + 44), 6) != packetChecksum) {
+          printf("Received corrupt packet\n");
+        }
+        else {// received out of sequence
+          char packetCopy[PACKET_LENGTH];
+          memset(packetCopy, '\0', PACKET_LENGTH);
+          memcpy(packetCopy, packet, PACKET_LENGTH);
+          memcpy(packetCopy, packetCopy + 22, 22);
+          memcpy(packetCopy + 22, packet, 22);
+          memset(packetCopy + 44, ACK, 1);
+          char chksumStr[5];
+          sprintf(chksumStr, "%d", checksum(packetCopy + 44, 6));
+          memcpy(packetCopy + 50, chksumStr, 4);
+          //printf("Sending: "); print_packet(packetCopy); printf("\n");
+          sendto(sockfd, packetCopy, PACKET_LENGTH, 0, (struct sockaddr *) &src, src_length);
+        }
+      }
+    }
+  }
   return 0;
 }
 
@@ -79,5 +131,15 @@ void print_packet (char * packet) {
       putchar(' ');
     }
     i++;
+  }
+  printf("\n");
+}
+
+void print_message(char * message) {
+  message = message + 46;
+  char *end = message + 4;
+  while(message != end) {
+    fprintf(stderr, "%c", *message);
+    message++;
   }
 }

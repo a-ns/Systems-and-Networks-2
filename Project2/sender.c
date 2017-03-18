@@ -10,6 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include "rdtSender.h"
@@ -18,15 +19,13 @@
 void getMessageFromUser(char *);
 void checkCommandLineArguments(int, char**);
 int setup_network (int* , char *, int , char *, int , struct hostent** , struct sockaddr_in * , struct sockaddr_in * , int);
-
+int timeout_recvfrom (int , char *, int *, struct sockaddr_in *, int);
 int main (int argc, char *argv[]) {
 
   checkCommandLineArguments(argc, argv);
   char messageToSend[500];
   getMessageFromUser(messageToSend);
   sendMessage(atoi(argv[1]), argv[4], atoi(argv[5]), argv[2], atoi(argv[3]), messageToSend);
-
-  //setup_network(argv, &sockfd, &hostptr, &network, &src, &ME_PORT, &DEST_PORT, &NETWORK_PORT);
 
   return 0;
 }
@@ -99,7 +98,6 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   strcpy(packet + 16, localPortStr);
   strcpy(packet + 22, desthost);
   strcpy(packet + 38, destPortStr);
-
   //start breaking up message into groups of 4 chars, enter rdt3.0 stuff
   //testing
   int segmentsRequired = (strlen(message) + 4 - 1) / 4;
@@ -108,12 +106,14 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   int k = 0;
   int i = 0;
   while (i < segmentsRequired){
+    memset(segments[i], '\0', 5);
     int j = 0;
     while (j < 4){
       segments[i][j] = message[k];
       j++;
       k++;
     }
+    printf("Segment%i: %s\n", i , segments[i]);
     i++;
   }
 
@@ -121,43 +121,55 @@ int sendMessage (int localPort, char* netwhost, int netwPort, char* desthost, in
   i = 0;
   char seq = '0';
   while (i < segmentsRequired) {
+
+
     int ack_received = 0;
+
+    memset(packet + 44, SYN, 1);
+    memset(packet + 45, seq, 1);
+    memset(packet + 46, '\0', 9);
+    memcpy(packet + 46, segments[i], 4);
+    int chksum = checksum((packet + 44), 6);
+    char chksumStr[5];
+    sprintf(chksumStr, "%d", chksum);
+    memcpy(packet + 50, chksumStr, 4);
+
     while (!ack_received) {
       //make packet with current segments[i] and send it
-      memset(packet + 44, SYN, 1);
-      memset(packet + 45, seq, 1);
-      strcpy(packet + 46, segments[i]);
-      int chksum = checksum((packet + 44), 6);
-      char chksumStr[5];
-      sprintf(chksumStr, "%d", chksum);
-      memcpy(packet + 50, chksumStr, 4);
 
       sendto(sockfd, packet, PACKET_LENGTH, 0, (struct sockaddr *) &network, sizeof(network));
-      memset(packet + 46, '\0', 8);
-      /*if timeout {
-        //do nothing and renter the loop
-      }
-      else {
-        //recvfrom
-
-        if (packet is good checksum and packet is right sequence number) {
+      print_packet(packet);
+      char response[PACKET_LENGTH];
+      struct sockaddr_in peer;
+      int len = PACKET_LENGTH;
+      if(timeout_recvfrom(sockfd, response, &len, &peer, 3)) {
+        //printf("Received: "); print_packet(response); printf("\n");
+        int responseChecksum = atoi(response+50);
+        char ack_response = response[45];
+        if(checksum(response + 44, 6) == responseChecksum && ack_response == seq){
           ack_received = 1;
         }
+        else {
+          printf("Received corrupt or out of sequence.\n");
+        }
       }
-      */
-      i++;
+      else {
+        printf("Timeout\n");
+      }
     }
+    i++;
     if (seq == '0' )
       seq = '1';
     else seq = '0';
+    memset(packet + 46, '\0', 8);// fill message and checksum with zeroes for reuse
   }
 
-
+  packet[44] = 'F';
+  sendto(sockfd, packet, PACKET_LENGTH, 0, (struct sockaddr *) &network, sizeof(network));
 
 
   //end testing
 
-  //print_packet(packet);
 
 
   return 0;
@@ -173,4 +185,29 @@ void print_packet (char * packet) {
     }
     i++;
   }
+}
+
+int timeout_recvfrom (int sock, char *buf, int *length, struct sockaddr_in *connection, int timeoutinseconds) {
+    printf("\nIn timeout recvfrom\n");
+    fd_set socks;
+    struct timeval t;
+    FD_ZERO(&socks);
+    FD_SET(sock, &socks);
+    t.tv_sec = timeoutinseconds;
+    t.tv_usec = 0;
+
+    if (select(sock + 1, &socks, NULL, NULL, &t) < 0) {
+      perror("select");
+      exit(1);
+    }
+
+    if (FD_ISSET(sock, &socks)) {
+      recvfrom(sock, buf, *length, 0, (struct sockaddr *)connection, (void *) length);
+      print_packet(buf);
+      return 1;
+    }
+    else {
+      return 0;
+    }
+    return 0;
 }
