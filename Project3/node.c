@@ -24,7 +24,7 @@ int main (int argc, char *argv[]) {
   struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
 
 
-  cleanup(neighbors);
+  cleanup(theNeighbors);
   return 0;
 }
 
