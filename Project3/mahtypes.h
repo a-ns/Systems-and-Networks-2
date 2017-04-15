@@ -3,8 +3,8 @@
 #define _MAHTYPES_H_
 
 struct neighbor {
-  char * label;
-  char * hostname;
+  char label;
+  char hostname[30];
   int portNumber;
   int cost;
 };

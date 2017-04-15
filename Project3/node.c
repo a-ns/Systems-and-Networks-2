@@ -8,6 +8,8 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include "mahtypes.h"
 
 /* Our Dijkstra matrix will be a 2D array of ints. The rows/columns will correspond to the neighboring nodes represented as an integer
@@ -16,12 +18,21 @@
 */
 
 int countFile(char *);
+char* lsp_serialize(struct linkStatePacket *);
 struct neighbors * readFile(char*, int);
 void checkCommandLineArguments(int, char**);
 void cleanup(struct neighbors *);
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
   struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
+  struct linkStatePacket packet;
+  packet.hopCounter = 12;
+  packet.seqNumber = 12;
+  packet.routerInfo.label = 'A';
+  strcpy(packet.routerInfo.hostname , "cs-ssh1.cs.uwf.edu");
+  packet.routerInfo.portNumber = 62100;
+  packet.routerInfo.cost = 6969;
+  lsp_serialize(&packet);
 
 
   cleanup(theNeighbors);
@@ -92,4 +103,53 @@ int countFile(char * filename) {
   fclose(fp);
   printf("numOfNeighbors: %i\n", lines);
   return lines;
+}
+// [ hop | hop | seq | seq | label | h|o | s| t| n| a| m|e |. |. |. | .|. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |p | o| r| t | .| c|o |s |t | \0]
+char * lsp_serialize(struct linkStatePacket * packet) {
+  char * packet_toString = NULL;
+  packet_toString = malloc(50);
+  memset(packet_toString, 0, 50);
+  char hopToString[4] = "";
+  sprintf(hopToString, "%i", packet->hopCounter);
+  memcpy(packet_toString, hopToString, 2);
+  memset(packet_toString + 2, '|', 1);
+
+
+  char seqToString[3] = "";
+  sprintf(seqToString, "%i", packet->seqNumber);
+  memcpy(packet_toString + 3, seqToString, 2);
+  memset(packet_toString + 5, '|', 1);
+
+  memset(packet_toString + 6, packet->routerInfo.label, 1);
+  memset(packet_toString + 7, '|', 1);
+
+  memcpy(packet_toString + 8, packet->routerInfo.hostname, 29);
+  memset(packet_toString + 37, '|', 1);
+
+  char portToString[6] = "";
+  sprintf(portToString, "%i", packet->routerInfo.portNumber);
+  memcpy(packet_toString + 38, portToString, 5);
+  memset(packet_toString + 43, '|', 1);
+
+  char costToString[5] = "";
+  sprintf(costToString, "%i", packet->routerInfo.cost);
+  memcpy(packet_toString + 44, costToString, 4);
+  memset(packet_toString + 48, '|', 1);
+
+
+  memset(packet_toString + 49, 0, 1);
+  int i = 0;
+  while(i < 49){
+    if(packet_toString[i] == '\0') {
+      fprintf(stderr, "/");
+    }
+    fprintf(stderr, "%c", packet_toString[i]);
+
+    i++;
+  }
+  fprintf(stderr, "\n");
+
+  //printf("packet_toString: %s\n", packet_toString);
+
+  return packet_toString;
 }
