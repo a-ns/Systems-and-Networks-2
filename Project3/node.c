@@ -8,18 +8,7 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
-struct neighbor {
-  char * label;
-  char * hostname;
-  int portNumber;
-  int cost;
-};
-
-struct neighbors {
-  int numOfNeighbors; // logical size
-  int physicalSize;
-  struct neighbor * theNeighbors; // array of struct
-};
+#include "mahtypes.h"
 
 /* Our Dijkstra matrix will be a 2D array of ints. The rows/columns will correspond to the neighboring nodes represented as an integer
    from 0 to totalNumRouters - 1. To get the information for the corresponding router in that matrix, just index into struct neighbors.theNeighbors[i].
@@ -29,10 +18,13 @@ struct neighbors {
 int countFile(char *);
 struct neighbors * readFile(char*, int);
 void checkCommandLineArguments(int, char**);
-
+void cleanup(struct neighbors *);
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
-  readFile(argv[4], atoi(argv[3]));
+  struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
+
+
+  cleanup(neighbors);
   return 0;
 }
 
@@ -44,12 +36,19 @@ void checkCommandLineArguments(int argc, char *argv[]) {
   return;
 }
 
+void cleanup(struct neighbors * theNeighbors) {
+  free(theNeighbors->theNeighbors);
+  free(theNeighbors);
+
+  return;
+}
+
 struct neighbors * readFile(char * filename, int totalNumRouters) {
   int numOfNeighbors = countFile(filename);
   struct neighbors * theNeighbors = malloc(sizeof(struct neighbors));
-  theNeighbors->physicalSize = totalNumRouters;
-  theNeighbors->theNeighbors = malloc(sizeof(struct neighbor)*totalNumRouters);
+  theNeighbors->theNeighbors = malloc(sizeof(struct neighbor)*numOfNeighbors);
   theNeighbors->numOfNeighbors = numOfNeighbors;
+  theNeighbors->physicalSize = numOfNeighbors;
 
   FILE *fp = fopen(filename, "r");
   char ch = 0;
