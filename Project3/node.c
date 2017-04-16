@@ -24,20 +24,21 @@ struct neighbors * readFile(char*, int);
 void checkCommandLineArguments(int, char**);
 void cleanup(struct neighbors *);
 void print_lsp(struct linkStatePacket *);
+void print_struct_neighbor(struct neighbor);
 
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
   struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
-  struct linkStatePacket packet;
-  packet.hopCounter = 12;
-  packet.seqNumber = 12;
-  packet.routerInfo.label = 'A';
-  strcpy(packet.routerInfo.hostname , "cs-ssh1.cs.uwf.edu");
-  packet.routerInfo.portNumber = 62100;
-  packet.routerInfo.cost = 6969;
-  struct linkStatePacket * deserialize_test = lsp_deserialize(lsp_serialize(&packet));
-
-  print_lsp(deserialize_test);
+  // struct linkStatePacket packet;
+  // packet.hopCounter = 12;
+  // packet.seqNumber = 12;
+  // packet.routerInfo.label = 'A';
+  // strcpy(packet.routerInfo.hostname , "cs-ssh1.cs.uwf.edu");
+  // packet.routerInfo.portNumber = 62100;
+  // packet.routerInfo.cost = 6969;
+  // struct linkStatePacket * deserialize_test = lsp_deserialize(lsp_serialize(&packet));
+  //
+  // print_lsp(deserialize_test);
 
   cleanup(theNeighbors);
   return 0;
@@ -52,6 +53,7 @@ void checkCommandLineArguments(int argc, char *argv[]) {
 }
 
 void cleanup(struct neighbors * theNeighbors) {
+  if (theNeighbors == NULL) return;
   free(theNeighbors->theNeighbors);
   free(theNeighbors);
 
@@ -59,6 +61,7 @@ void cleanup(struct neighbors * theNeighbors) {
 }
 
 struct neighbors * readFile(char * filename, int totalNumRouters) {
+  if(filename == NULL || totalNumRouters <=0) return NULL;
   int numOfNeighbors = countFile(filename);
   struct neighbors * theNeighbors = malloc(sizeof(struct neighbors));
   theNeighbors->theNeighbors = malloc(sizeof(struct neighbor)*numOfNeighbors);
@@ -80,14 +83,33 @@ struct neighbors * readFile(char * filename, int totalNumRouters) {
     ch = 0;
 
     processingNeighbor_String[j-1] = '\0';
-    // now strtok the string, and shove the data into theNeighbors
     printf("processingNeighbor_String: %s\n", processingNeighbor_String);
+    // now strtok the string, and shove the data into theNeighbors
+    char * token = NULL;
+    //get the label
+    token = strtok(processingNeighbor_String, ",");
+    theNeighbors->theNeighbors[i].label = token[0];
+    token = strtok(NULL, ",");
+  //  printf("t:%s\n", token);
+    // get the hostname
+    strcpy(theNeighbors->theNeighbors[i].hostname , token);
+    token = strtok(NULL, ",");
+  //  printf("t:%s\n", token);
+    // get the portNum
+    theNeighbors->theNeighbors[i].portNumber = atoi(token);
+    token = strtok(NULL, ",");
+    //printf("t:%s\n", token);
+    // get the cost
+    theNeighbors->theNeighbors[i].cost = atoi(token);
+
+    print_struct_neighbor(theNeighbors->theNeighbors[i]);
   }
   fclose(fp);
   return theNeighbors;
 }
 
 int countFile(char * filename) {
+  if (filename == NULL) return -1;
   FILE * fp = fopen(filename, "r");
   if (fp == NULL)
     return 0;
@@ -110,6 +132,7 @@ int countFile(char * filename) {
 }
 // [ hop | hop | seq | seq | label | h|o | s| t| n| a| m|e |. |. |. | .|. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |p | o| r| t | .| c|o |s |t | \0]
 char * lsp_serialize(struct linkStatePacket * packet) {
+  if (packet == NULL) return NULL;
   char * packet_toString = NULL;
   packet_toString = malloc(50);
   memset(packet_toString, ' ', 50);
@@ -143,16 +166,16 @@ char * lsp_serialize(struct linkStatePacket * packet) {
 
 
   memset(packet_toString + 49, 0, 1);
-  // int i = 0;
-  // while(i < 49){
-  //   if(packet_toString[i] == '\0') {
-  //     fprintf(stderr, "/");
-  //   }
-  //   fprintf(stderr, "%c", packet_toString[i]);
-  //
-  //   i++;
-  // }
-  // fprintf(stderr, "\n");
+  int i = 0;
+  while(i < 49){
+    if(packet_toString[i] == '\0') {
+      fprintf(stderr, "/");
+    }
+    fprintf(stderr, "%c", packet_toString[i]);
+
+    i++;
+  }
+  fprintf(stderr, "\n");
 
   return packet_toString;
 }
@@ -163,19 +186,22 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
   struct linkStatePacket *packet_d = NULL;
   packet_d = malloc(sizeof(struct linkStatePacket));
   token = strtok(packet_s, ",");
-  printf("t:%s\n", token);
+//  printf("t:%s\n", token);
   // get the hop counter
   packet_d->hopCounter = atoi(token);
   token = strtok(NULL, ",");
-  printf("t:%s\n", token);
+//  printf("t:%s\n", token);
   // get the seqNumber
   packet_d->seqNumber = atoi(token);
   token = strtok(NULL, ",");
-  printf("t:%s\n", token);
+//  printf("t:%s\n", token);
+
+
+  // deserialize struct neighbor
   // get the label
   packet_d->routerInfo.label = token[0];
   token = strtok(NULL, ",");
-  printf("t:%s\n", token);
+//  printf("t:%s\n", token);
   // get the hostname
   strcpy(packet_d->routerInfo.hostname , token);
   token = strtok(NULL, ",");
@@ -183,7 +209,7 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
   // get the portNum
   packet_d->routerInfo.portNumber = atoi(token);
   token = strtok(NULL, ",");
-  printf("t:%s\n", token);
+//  printf("t:%s\n", token);
   // get the cost
   packet_d->routerInfo.cost = atoi(token);
 
@@ -194,9 +220,13 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
 void print_lsp(struct linkStatePacket * packet){
   printf("Hop Counter: %i\n", packet->hopCounter);
   printf("seqNumber: %i\n", packet->seqNumber);
-  printf("routerInfo.label: %c\n" , packet->routerInfo.label);
-  printf("routerInfo.hostname: %s\n", packet->routerInfo.hostname);
-  printf("routerInfo.portNumber: %i\n" , packet->routerInfo.portNumber);
-  printf("routerInfo.cost: %i\n", packet->routerInfo.cost);
+  print_struct_neighbor(packet->routerInfo);
   return;
+}
+
+void print_struct_neighbor(struct neighbor routerInfo) {
+  printf("routerInfo.label: %c\n" , routerInfo.label);
+  printf("routerInfo.hostname: %s\n", routerInfo.hostname);
+  printf("routerInfo.portNumber: %i\n" , routerInfo.portNumber);
+  printf("routerInfo.cost: %i\n", routerInfo.cost);
 }
