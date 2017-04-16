@@ -116,45 +116,43 @@ char * lsp_serialize(struct linkStatePacket * packet) {
   char hopToString[4] = "";
   sprintf(hopToString, "%i", packet->hopCounter);
   memcpy(packet_toString, hopToString, 2);
-  memset(packet_toString + 2, '|', 1);
+  memset(packet_toString + 2, ',', 1);
 
 
   char seqToString[3] = "";
   sprintf(seqToString, "%i", packet->seqNumber);
   memcpy(packet_toString + 3, seqToString, 2);
-  memset(packet_toString + 5, '|', 1);
+  memset(packet_toString + 5, ',', 1);
 
   memset(packet_toString + 6, packet->routerInfo.label, 1);
-  memset(packet_toString + 7, '|', 1);
+  memset(packet_toString + 7, ',', 1);
 
   memcpy(packet_toString + 8, packet->routerInfo.hostname, 29);
   memset(packet_toString + 8 + strlen(packet->routerInfo.hostname), ' ', 29 - strlen(packet->routerInfo.hostname));
-  memset(packet_toString + 37, '|', 1);
+  memset(packet_toString + 37, ',', 1);
 
   char portToString[6] = "";
   sprintf(portToString, "%i", packet->routerInfo.portNumber);
   memcpy(packet_toString + 38, portToString, 5);
-  memset(packet_toString + 43, '|', 1);
+  memset(packet_toString + 43, ',', 1);
 
   char costToString[5] = "";
   sprintf(costToString, "%i", packet->routerInfo.cost);
   memcpy(packet_toString + 44, costToString, 4);
-  memset(packet_toString + 48, '|', 1);
+  memset(packet_toString + 48, ',', 1);
 
 
   memset(packet_toString + 49, 0, 1);
-  int i = 0;
-  while(i < 49){
-    if(packet_toString[i] == '\0') {
-      fprintf(stderr, "/");
-    }
-    fprintf(stderr, "%c", packet_toString[i]);
-
-    i++;
-  }
-  fprintf(stderr, "\n");
-
-  //printf("packet_toString: %s\n", packet_toString);
+  // int i = 0;
+  // while(i < 49){
+  //   if(packet_toString[i] == '\0') {
+  //     fprintf(stderr, "/");
+  //   }
+  //   fprintf(stderr, "%c", packet_toString[i]);
+  //
+  //   i++;
+  // }
+  // fprintf(stderr, "\n");
 
   return packet_toString;
 }
@@ -164,27 +162,27 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
   char * token;
   struct linkStatePacket *packet_d = NULL;
   packet_d = malloc(sizeof(struct linkStatePacket));
-  token = strtok(packet_s, "|");
+  token = strtok(packet_s, ",");
   printf("t:%s\n", token);
   // get the hop counter
   packet_d->hopCounter = atoi(token);
-  token = strtok(NULL, "|");
+  token = strtok(NULL, ",");
   printf("t:%s\n", token);
   // get the seqNumber
   packet_d->seqNumber = atoi(token);
-  token = strtok(NULL, "|");
+  token = strtok(NULL, ",");
   printf("t:%s\n", token);
   // get the label
   packet_d->routerInfo.label = token[0];
-  token = strtok(NULL, "|");
+  token = strtok(NULL, ",");
   printf("t:%s\n", token);
   // get the hostname
   strcpy(packet_d->routerInfo.hostname , token);
-  token = strtok(NULL, "|");
+  token = strtok(NULL, ",");
   printf("t:%s\n", token);
   // get the portNum
   packet_d->routerInfo.portNumber = atoi(token);
-  token = strtok(NULL, "|");
+  token = strtok(NULL, ",");
   printf("t:%s\n", token);
   // get the cost
   packet_d->routerInfo.cost = atoi(token);
