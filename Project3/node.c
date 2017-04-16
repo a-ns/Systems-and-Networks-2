@@ -19,9 +19,12 @@
 
 int countFile(char *);
 char* lsp_serialize(struct linkStatePacket *);
+struct linkStatePacket * lsp_deserialize(char *);
 struct neighbors * readFile(char*, int);
 void checkCommandLineArguments(int, char**);
 void cleanup(struct neighbors *);
+void print_lsp(struct linkStatePacket *);
+
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
   struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
@@ -32,8 +35,9 @@ int main (int argc, char *argv[]) {
   strcpy(packet.routerInfo.hostname , "cs-ssh1.cs.uwf.edu");
   packet.routerInfo.portNumber = 62100;
   packet.routerInfo.cost = 6969;
-  lsp_serialize(&packet);
+  struct linkStatePacket * deserialize_test = lsp_deserialize(lsp_serialize(&packet));
 
+  print_lsp(deserialize_test);
 
   cleanup(theNeighbors);
   return 0;
@@ -108,7 +112,7 @@ int countFile(char * filename) {
 char * lsp_serialize(struct linkStatePacket * packet) {
   char * packet_toString = NULL;
   packet_toString = malloc(50);
-  memset(packet_toString, 0, 50);
+  memset(packet_toString, ' ', 50);
   char hopToString[4] = "";
   sprintf(hopToString, "%i", packet->hopCounter);
   memcpy(packet_toString, hopToString, 2);
@@ -124,6 +128,7 @@ char * lsp_serialize(struct linkStatePacket * packet) {
   memset(packet_toString + 7, '|', 1);
 
   memcpy(packet_toString + 8, packet->routerInfo.hostname, 29);
+  memset(packet_toString + 8 + strlen(packet->routerInfo.hostname), ' ', 29 - strlen(packet->routerInfo.hostname));
   memset(packet_toString + 37, '|', 1);
 
   char portToString[6] = "";
@@ -152,4 +157,48 @@ char * lsp_serialize(struct linkStatePacket * packet) {
   //printf("packet_toString: %s\n", packet_toString);
 
   return packet_toString;
+}
+
+
+struct linkStatePacket * lsp_deserialize(char *packet_s) {
+  char * token;
+  struct linkStatePacket *packet_d = NULL;
+  packet_d = malloc(sizeof(struct linkStatePacket));
+  token = strtok(packet_s, "|");
+  printf("t:%s\n", token);
+  // get the hop counter
+  packet_d->hopCounter = atoi(token);
+  token = strtok(NULL, "|");
+  printf("t:%s\n", token);
+  // get the seqNumber
+  packet_d->seqNumber = atoi(token);
+  token = strtok(NULL, "|");
+  printf("t:%s\n", token);
+  // get the label
+  packet_d->routerInfo.label = token[0];
+  token = strtok(NULL, "|");
+  printf("t:%s\n", token);
+  // get the hostname
+  strcpy(packet_d->routerInfo.hostname , token);
+  token = strtok(NULL, "|");
+  printf("t:%s\n", token);
+  // get the portNum
+  packet_d->routerInfo.portNumber = atoi(token);
+  token = strtok(NULL, "|");
+  printf("t:%s\n", token);
+  // get the cost
+  packet_d->routerInfo.cost = atoi(token);
+
+
+  return packet_d;
+}
+
+void print_lsp(struct linkStatePacket * packet){
+  printf("Hop Counter: %i\n", packet->hopCounter);
+  printf("seqNumber: %i\n", packet->seqNumber);
+  printf("routerInfo.label: %c\n" , packet->routerInfo.label);
+  printf("routerInfo.hostname: %s\n", packet->routerInfo.hostname);
+  printf("routerInfo.portNumber: %i\n" , packet->routerInfo.portNumber);
+  printf("routerInfo.cost: %i\n", packet->routerInfo.cost);
+  return;
 }
