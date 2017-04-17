@@ -22,7 +22,7 @@ char* lsp_serialize(struct linkStatePacket *);
 struct linkStatePacket * lsp_deserialize(char *);
 struct neighbors * readFile(char*, int);
 void checkCommandLineArguments(int, char**);
-void cleanup(struct neighbors *);
+void cleanup(struct neighbors *, struct neighbors *);
 void print_lsp(struct linkStatePacket *);
 void print_struct_neighbor(struct neighbor);
 
@@ -39,8 +39,14 @@ int main (int argc, char *argv[]) {
   // struct linkStatePacket * deserialize_test = lsp_deserialize(lsp_serialize(&packet));
   //
   // print_lsp(deserialize_test);
+  struct neighbors * networkNodes = malloc(sizeof(struct neighbors)); // lsp's received will have their info shoved into this
+  networkNodes->numOfNeighbors = 0;
+  networkNodes->physicalSize = atoi(argv[3]);
+  networkNodes->theNeighbors = malloc(sizeof(struct neighbor) * networkNodes->physicalSize);
 
-  cleanup(theNeighbors);
+
+
+  cleanup(theNeighbors, networkNodes);
   return 0;
 }
 
@@ -52,14 +58,27 @@ void checkCommandLineArguments(int argc, char *argv[]) {
   return;
 }
 
-void cleanup(struct neighbors * theNeighbors) {
-  if (theNeighbors == NULL) return;
+/*
+* Frees the malloc'd struct neighbors *
+* @param theNeighbors struct neighbors * pointer to the initial known neighbors that were read from the file
+* @param networkNodes struct neighbors * pointer to information about other routers on the network that this node isn't directly connected to
+*/
+void cleanup(struct neighbors * theNeighbors, struct neighbors * networkNodes) {
+  if (theNeighbors == NULL || networkNodes) return;
   free(theNeighbors->theNeighbors);
   free(theNeighbors);
+  free(networkNodes->theNeighbors);
+  free(networkNodes);
 
   return;
 }
 
+/*
+* Reads a file containing information about the immediate neighbors to this node
+* @param filename char * path to the file to be read
+* @param totalNumRouters int the number of routers on the network passed in from the command line
+* @return struct neighbors * information about the immediate neighbors to this node
+*/
 struct neighbors * readFile(char * filename, int totalNumRouters) {
   if(filename == NULL || totalNumRouters <=0) return NULL;
   int numOfNeighbors = countFile(filename);
@@ -108,6 +127,11 @@ struct neighbors * readFile(char * filename, int totalNumRouters) {
   return theNeighbors;
 }
 
+/*
+* Counts the number of neighbors in a filename
+* @param filename char * location of the file
+* @return number of known neighbors for this node
+*/
 int countFile(char * filename) {
   if (filename == NULL) return -1;
   FILE * fp = fopen(filename, "r");
@@ -131,6 +155,11 @@ int countFile(char * filename) {
   return lines;
 }
 // [ hop | hop | seq | seq | label | h|o | s| t| n| a| m|e |. |. |. | .|. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |p | o| r| t | .| c|o |s |t | \0]
+/*
+* Serializes a struct linkStatePacket to send it across a network
+* @param struct linkStatePacket * pointer to the desired packet to be serialized
+* @return char * representation of a struct linkStatePacket
+*/
 char * lsp_serialize(struct linkStatePacket * packet) {
   if (packet == NULL) return NULL;
   char * packet_toString = NULL;
@@ -180,7 +209,11 @@ char * lsp_serialize(struct linkStatePacket * packet) {
   return packet_toString;
 }
 
-
+/*
+* deserialize a struct linkStatePacket to be able to receive it across a network
+* @param packet_s - char * a serialized version of a struct linkStatePacket
+* @return struct linkStatePacket * pointer to the constructed/deserialized linkStatePacket
+*/
 struct linkStatePacket * lsp_deserialize(char *packet_s) {
   char * token;
   struct linkStatePacket *packet_d = NULL;
@@ -216,17 +249,43 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
 
   return packet_d;
 }
-
+/*
+* Prints the struct linkStatePacket pointed to by packet
+* @param packet - struct linkStatePacket *
+*/
 void print_lsp(struct linkStatePacket * packet){
   printf("Hop Counter: %i\n", packet->hopCounter);
   printf("seqNumber: %i\n", packet->seqNumber);
   print_struct_neighbor(packet->routerInfo);
   return;
 }
-
+/*
+* Prints the struct neighbor
+* @param routerInfo - struct neighbor
+*/
 void print_struct_neighbor(struct neighbor routerInfo) {
   printf("routerInfo.label: %c\n" , routerInfo.label);
   printf("routerInfo.hostname: %s\n", routerInfo.hostname);
   printf("routerInfo.portNumber: %i\n" , routerInfo.portNumber);
   printf("routerInfo.cost: %i\n", routerInfo.cost);
+}
+
+/*
+* Gets the index in the 2D Dijkstra array for the label
+* @param label - char the desired label to be converted to an index
+* @param networkNodes - struct neighbors * the known routers on the network
+* @return the index
+*/
+int getLabelIndex(char label, struct neighbors * networkNodes) {
+  if (label > 'Z' || label < 'A') {
+    printf("Invalid label.\n");
+    return -1;
+  }
+  int i;
+  for(i = 0; i < networkNodes->numOfNeighbors; i ++) {
+    if(label == networkNodes->theNeighbors[i].label) {
+      return i;
+    }
+  }
+  return -1;
 }
