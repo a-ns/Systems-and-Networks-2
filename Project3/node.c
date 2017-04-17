@@ -22,32 +22,65 @@ char* lsp_serialize(struct linkStatePacket *);
 struct linkStatePacket * lsp_deserialize(char *);
 struct neighbors * readFile(char*, int);
 void checkCommandLineArguments(int, char**);
-void cleanup(struct neighbors *, struct neighbors *);
+void cleanup(struct neighbors *);
 void print_lsp(struct linkStatePacket *);
 void print_struct_neighbor(struct neighbor);
+void printEntry( struct entry );
+struct router * newRouter(char **, struct neighbors *);
+int getLabelIndex(char, char *, int);
 
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
   struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
-  // struct linkStatePacket packet;
-  // packet.hopCounter = 12;
-  // packet.seqNumber = 12;
-  // packet.routerInfo.label = 'A';
-  // strcpy(packet.routerInfo.hostname , "cs-ssh1.cs.uwf.edu");
-  // packet.routerInfo.portNumber = 62100;
-  // packet.routerInfo.cost = 6969;
-  // struct linkStatePacket * deserialize_test = lsp_deserialize(lsp_serialize(&packet));
-  //
-  // print_lsp(deserialize_test);
-  struct neighbors * networkNodes = malloc(sizeof(struct neighbors)); // lsp's received will have their info shoved into this
-  networkNodes->numOfNeighbors = 0;
-  networkNodes->physicalSize = atoi(argv[3]);
-  networkNodes->theNeighbors = malloc(sizeof(struct neighbor) * networkNodes->physicalSize);
+
+  struct router * theRouter = newRouter(argv, theNeighbors);
+  // whenever a new lsp comes in, add its values to theRouter->entries
+  // if lsp contains a new undiscovered router, add it to theRouter->networkLabels[theRouter->networkLabelsLength++]
 
 
 
-  cleanup(theNeighbors, networkNodes);
+
+  free(theRouter->entries); // add to cleanup later
+  free(theRouter); // add to cleanup later
+  cleanup(theNeighbors);
   return 0;
+}
+
+struct entry * receive_lsp( char * packet) {
+  struct linkStatePacket * packet_d = lsp_deserialize(packet);
+  struct entry * entry = malloc(sizeof(entry));
+  entry->to = packet_d->entry.to;
+  entry->from = packet_d->entry.from;
+  entry->cost = packet_d->entry.cost;
+
+  free(packet_d);
+  return entry;
+}
+
+struct router * newRouter(char **argv, struct neighbors * theNeighbors) {
+  struct router * theRouter = malloc(sizeof(struct router));
+  theRouter->label = argv[1][0];
+  gethostname(theRouter->hostname, 30);
+  theRouter->numRouters = atoi(argv[3]);
+  theRouter->numEntries = 0;
+  theRouter->networkLabels = malloc(theRouter->numRouters + 1);
+  theRouter->networkLabelsLength = 1;
+  theRouter->networkLabels[0] = theRouter->label;
+  theRouter->entries = malloc(sizeof(struct entry)*theRouter->numRouters*theRouter->numRouters);
+  // add neighbors to the router
+  while (theRouter->numEntries < theNeighbors->numOfNeighbors) {
+    theRouter->entries[theRouter->numEntries].to = theNeighbors->theNeighbors[theRouter->numEntries].label;
+    theRouter->entries[theRouter->numEntries].cost = theNeighbors->theNeighbors[theRouter->numEntries].cost;
+    theRouter->entries[theRouter->numEntries].from = theRouter->label;
+
+    theRouter->networkLabels[theRouter->networkLabelsLength] = theNeighbors->theNeighbors[theRouter->numEntries].label;
+
+    theRouter->numEntries++;
+    theRouter->networkLabelsLength++;
+  }
+
+
+  return theRouter;
 }
 
 void checkCommandLineArguments(int argc, char *argv[]) {
@@ -63,13 +96,10 @@ void checkCommandLineArguments(int argc, char *argv[]) {
 * @param theNeighbors struct neighbors * pointer to the initial known neighbors that were read from the file
 * @param networkNodes struct neighbors * pointer to information about other routers on the network that this node isn't directly connected to
 */
-void cleanup(struct neighbors * theNeighbors, struct neighbors * networkNodes) {
-  if (theNeighbors == NULL || networkNodes) return;
+void cleanup(struct neighbors * theNeighbors) {
+  if (theNeighbors == NULL ) return;
   free(theNeighbors->theNeighbors);
   free(theNeighbors);
-  free(networkNodes->theNeighbors);
-  free(networkNodes);
-
   return;
 }
 
@@ -102,7 +132,7 @@ struct neighbors * readFile(char * filename, int totalNumRouters) {
     ch = 0;
 
     processingNeighbor_String[j-1] = '\0';
-    printf("processingNeighbor_String: %s\n", processingNeighbor_String);
+  //  printf("processingNeighbor_String: %s\n", processingNeighbor_String);
     // now strtok the string, and shove the data into theNeighbors
     char * token = NULL;
     //get the label
@@ -121,7 +151,7 @@ struct neighbors * readFile(char * filename, int totalNumRouters) {
     // get the cost
     theNeighbors->theNeighbors[i].cost = atoi(token);
 
-    print_struct_neighbor(theNeighbors->theNeighbors[i]);
+    //print_struct_neighbor(theNeighbors->theNeighbors[i]);
   }
   fclose(fp);
   return theNeighbors;
@@ -154,7 +184,7 @@ int countFile(char * filename) {
   printf("numOfNeighbors: %i\n", lines);
   return lines;
 }
-// [ hop | hop | seq | seq | label | h|o | s| t| n| a| m|e |. |. |. | .|. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |p | o| r| t | .| c|o |s |t | \0]
+// [ hop | hop | seq | seq | labelFrom | h|o | s| t| n| a| m|e |. |. |. | .|. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |p | o| r| t | .| c|o |s |t | labelTo |\0]
 /*
 * Serializes a struct linkStatePacket to send it across a network
 * @param struct linkStatePacket * pointer to the desired packet to be serialized
@@ -163,8 +193,8 @@ int countFile(char * filename) {
 char * lsp_serialize(struct linkStatePacket * packet) {
   if (packet == NULL) return NULL;
   char * packet_toString = NULL;
-  packet_toString = malloc(50);
-  memset(packet_toString, ' ', 50);
+  packet_toString = malloc(55);
+  memset(packet_toString, ' ', 55);
   char hopToString[4] = "";
   sprintf(hopToString, "%i", packet->hopCounter);
   memcpy(packet_toString, hopToString, 2);
@@ -176,7 +206,7 @@ char * lsp_serialize(struct linkStatePacket * packet) {
   memcpy(packet_toString + 3, seqToString, 2);
   memset(packet_toString + 5, ',', 1);
 
-  memset(packet_toString + 6, packet->routerInfo.label, 1);
+  memset(packet_toString + 6, packet->entry.from, 1);
   memset(packet_toString + 7, ',', 1);
 
   memcpy(packet_toString + 8, packet->routerInfo.hostname, 29);
@@ -192,11 +222,11 @@ char * lsp_serialize(struct linkStatePacket * packet) {
   sprintf(costToString, "%i", packet->routerInfo.cost);
   memcpy(packet_toString + 44, costToString, 4);
   memset(packet_toString + 48, ',', 1);
-
-
-  memset(packet_toString + 49, 0, 1);
+  memset(packet_toString + 49, packet->entry.to, 1);
+  memset(packet_toString + 50, ',', 1);
+  memset(packet_toString + 51, 0, 1);
   int i = 0;
-  while(i < 49){
+  while(i < 51){
     if(packet_toString[i] == '\0') {
       fprintf(stderr, "/");
     }
@@ -233,6 +263,7 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
   // deserialize struct neighbor
   // get the label
   packet_d->routerInfo.label = token[0];
+  packet_d->entry.from = token[0];
   token = strtok(NULL, ",");
 //  printf("t:%s\n", token);
   // get the hostname
@@ -244,8 +275,10 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
   token = strtok(NULL, ",");
 //  printf("t:%s\n", token);
   // get the cost
-  packet_d->routerInfo.cost = atoi(token);
-
+  packet_d->entry.cost = atoi(token);
+  token = strtok(NULL, ",");
+  // get the labelTo
+  packet_d->entry.to = token[0];
 
   return packet_d;
 }
@@ -257,6 +290,7 @@ void print_lsp(struct linkStatePacket * packet){
   printf("Hop Counter: %i\n", packet->hopCounter);
   printf("seqNumber: %i\n", packet->seqNumber);
   print_struct_neighbor(packet->routerInfo);
+  printEntry(packet->entry);
   return;
 }
 /*
@@ -273,19 +307,25 @@ void print_struct_neighbor(struct neighbor routerInfo) {
 /*
 * Gets the index in the 2D Dijkstra array for the label
 * @param label - char the desired label to be converted to an index
-* @param networkNodes - struct neighbors * the known routers on the network
+* @param allLabels - all the labels of the peers on the network in the order in which they were discovered
+* @param allLabelsLength - length of allLabels
 * @return the index
 */
-int getLabelIndex(char label, struct neighbors * networkNodes) {
+int getLabelIndex(char label, char *allLabels, int allLabelsLength) {
   if (label > 'Z' || label < 'A') {
     printf("Invalid label.\n");
     return -1;
   }
   int i;
-  for(i = 0; i < networkNodes->numOfNeighbors; i ++) {
-    if(label == networkNodes->theNeighbors[i].label) {
+  for(i = 0; i < allLabelsLength; i ++) {
+    if(label == allLabels[i]) {
       return i;
     }
   }
   return -1;
+}
+
+void printEntry (struct entry entry){
+  printf("Entry: %3c %3c %i\n", entry.from, entry.to, entry.cost);
+  return;
 }
