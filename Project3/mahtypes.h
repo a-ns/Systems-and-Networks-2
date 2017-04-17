@@ -38,6 +38,12 @@ struct linkStatePacket {
   struct entry entry;
 };
 
+struct matrix {
+  int rows;
+  int cols;
+  int **m;
+};
+
 
 
 #endif // _MAHTYPES_H_

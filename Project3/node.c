@@ -28,6 +28,8 @@ void print_struct_neighbor(struct neighbor);
 void printEntry( struct entry );
 struct router * newRouter(char **, struct neighbors *);
 int getLabelIndex(char, char *, int);
+struct matrix * build_dijkstra(struct router *);
+void printGraph (struct matrix *);
 
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
@@ -37,31 +39,61 @@ int main (int argc, char *argv[]) {
   // whenever a new lsp comes in, add its values to theRouter->entries
   // if lsp contains a new undiscovered router, add it to theRouter->networkLabels[theRouter->networkLabelsLength++]
 
+  struct matrix * dijkstra = build_dijkstra(theRouter);
 
-
+  printGraph(dijkstra);
 
   free(theRouter->entries); // add to cleanup later
   free(theRouter); // add to cleanup later
+  int i = 0;
+  /* deallocate the array */
+  for (i=0; i< dijkstra->rows; i++) {
+    free(dijkstra->m[i]);
+  }
+  free(dijkstra);
   cleanup(theNeighbors);
   return 0;
 }
 
-int ** build_dijkstra (struct router * router) {
-    if(router == NULL) return NULL;
+void printGraph(struct matrix * graph){
+  int i,j;
+  for(i = 0; i < graph->rows; i++){
+    for(j = 0; j < graph->cols; j++){
+      printf(" %i", graph->m[i][j]);
+    }
+    printf("\n");
+  }
+  return;
+}
 
-    int ** dijkstra = malloc(sizeof(int) * router->numRouters * router->numRouters);
+struct matrix * build_dijkstra (struct router * router) {
+    if(router == NULL) return NULL;
+    struct matrix * matrix = malloc(sizeof(struct matrix));
+    matrix->rows = router->numRouters;
+    matrix->cols = router->numRouters;
+    //int ** dijkstra;//malloc(sizeof(int) * router->numRouters * router->numRouters);
+    /* allocate the array */
+    matrix->m =  malloc(router->numRouters * sizeof * matrix->m);
     int i = 0;
-    while ( i < router->numRouters) {
-      dijkstra[i][i] = -1;
+    for (i=0; i<router->numRouters; i++){
+      matrix->m[i] = malloc(router->numRouters * sizeof *matrix->m[i]);
+    }
+
+    i  = 0;
+    int j = 0;
+    for(i = 0; i < matrix->rows; i++){
+      for(j = 0; j < matrix->cols; j++){
+        matrix->m[i][j] = 0;
+      }
     }
 
     i = 0;
     while ( i < router->numEntries) {
-      dijkstra[getLabelIndex(router->entries[i].from, router->networkLabels, router->networkLabelsLength)][getLabelIndex(router->entries[i].to, router->networkLabels, router->networkLabelsLength)] = router->entries[i].cost;
+      matrix->m[getLabelIndex(router->entries[i].from, router->networkLabels, router->networkLabelsLength)][getLabelIndex(router->entries[i].to, router->networkLabels, router->networkLabelsLength)] = router->entries[i].cost;
       i++;
     }
 
-    return dijkstra;
+    return matrix;
 }
 
 struct entry * receive_lsp( char * packet) {
