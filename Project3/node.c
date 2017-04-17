@@ -46,6 +46,24 @@ int main (int argc, char *argv[]) {
   return 0;
 }
 
+int ** build_dijkstra (struct router * router) {
+    if(router == NULL) return NULL;
+
+    int ** dijkstra = malloc(sizeof(int) * router->numRouters * router->numRouters);
+    int i = 0;
+    while ( i < router->numRouters) {
+      dijkstra[i][i] = -1;
+    }
+
+    i = 0;
+    while ( i < router->numEntries) {
+      dijkstra[getLabelIndex(router->entries[i].from, router->networkLabels, router->networkLabelsLength)][getLabelIndex(router->entries[i].to, router->networkLabels, router->networkLabelsLength)] = router->entries[i].cost;
+      i++;
+    }
+
+    return dijkstra;
+}
+
 struct entry * receive_lsp( char * packet) {
   struct linkStatePacket * packet_d = lsp_deserialize(packet);
   struct entry * entry = malloc(sizeof(entry));
