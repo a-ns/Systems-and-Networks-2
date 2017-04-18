@@ -2,6 +2,10 @@
 #ifndef _MAHTYPES_H_
 #define _MAHTYPES_H_
 
+#define boolean int
+#define FALSE 0
+#define TRUE 1
+
 struct neighbor {
   char label;
   char hostname[30];

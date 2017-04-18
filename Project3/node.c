@@ -8,6 +8,7 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <string.h>
 #include <unistd.h>
 #include "mahtypes.h"
@@ -30,6 +31,8 @@ struct router * newRouter(char **, struct neighbors *);
 int getLabelIndex(char, char *, int);
 struct matrix * build_dijkstra(struct router *);
 void printGraph (struct matrix *);
+void dijkstra_shortest_path(struct matrix *, int, int);
+int minimumDistance(boolean *, int *, int);
 
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
@@ -42,6 +45,14 @@ int main (int argc, char *argv[]) {
   struct matrix * dijkstra = build_dijkstra(theRouter);
 
   printGraph(dijkstra);
+
+  printf("Shortest distances:\n");
+  printf(" %3c %3c %3c\n", theRouter->networkLabels[0], theRouter->networkLabels[1], theRouter->networkLabels[2]);
+  printf("%c", theRouter->label);
+  dijkstra_shortest_path(dijkstra, getLabelIndex(theRouter->label, theRouter->networkLabels, theRouter->networkLabelsLength), getLabelIndex('B', theRouter->networkLabels ,theRouter->networkLabelsLength));
+
+
+
 
   free(theRouter->entries); // add to cleanup later
   free(theRouter); // add to cleanup later
@@ -78,8 +89,7 @@ struct matrix * build_dijkstra (struct router * router) {
     for (i=0; i<router->numRouters; i++){
       matrix->m[i] = malloc(router->numRouters * sizeof *matrix->m[i]);
     }
-
-    i  = 0;
+    i = 0;
     int j = 0;
     for(i = 0; i < matrix->rows; i++){
       for(j = 0; j < matrix->cols; j++){
@@ -378,4 +388,59 @@ int getLabelIndex(char label, char *allLabels, int allLabelsLength) {
 void printEntry (struct entry entry){
   printf("Entry: %3c %3c %i\n", entry.from, entry.to, entry.cost);
   return;
+}
+
+void dijkstra_shortest_path (struct matrix * graph, int start, int dest) {
+    //boolean[] visited = new boolean[V];
+    boolean visited[graph->rows];
+    //int[] dist = new int[V]; //stores best distance from start to all other nodes.
+    int dist[graph->rows];
+    //int[] prev = new int[V]; //For figuring out the path from start to dest
+    int prev[graph->rows];
+    int i;
+    for (i = 0; i < graph->rows; i++) {
+      visited[i] = FALSE;
+      dist[i] = INT_MAX; //"infinity" value because they are unknown
+    }
+    dist[start] = 0; //distance from start to itself is zero
+    prev[start] = -1;
+    int fromV;
+    for (fromV = 0; fromV < graph->rows - 1; fromV++) {
+      int current = minimumDistance(visited, dist, graph->rows); //find the next vertex to work on. starts with start vertex because we set it to zero.
+      visited[current] = TRUE; //mark the current node as visited so we don't keep doing it
+
+      for (int toV = 0; toV < graph->rows; toV++) {
+        /* 1. check if the toV (vertex) is not visited
+           2. if there is an edge from current to toV (0 in the graph indicates no edge)
+           3. dist[current] is obviously not MAX_VALUE for the one to do, but we want to make this check so that 4) does not overflow
+           4. if the distance to the current vertex plus the weight to the next vertex is better than the existing value to the next vertex
+                then update that distance.
+        */
+        if (visited[toV] == FALSE && graph->m[current][toV] != 0 && dist[current] != INT_MAX
+                                  && dist[current] + graph->m[current][toV] < dist[toV]) {
+            dist[toV] = dist[current] + graph->m[current][toV];
+            prev[toV] = current; //this helps us "remember" the pathway to that vertex
+          }
+      }
+    }
+    i = 0;
+    while ( i < graph->rows) {
+      if (dist[i] != INT_MAX)
+      printf(" %2i ", dist[i]);
+      i++;
+    }
+    printf("\n");
+  }
+
+  int minimumDistance (boolean *visited, int * dist, int V) {
+    int minimum = INT_MAX;
+    int u = 0;
+    int i;
+    for(i = 0; i < V; i++) {
+      if (visited[i] == FALSE && dist[i] < minimum) {
+        minimum = dist[i];
+        u = i;
+      }
+    }
+    return u;
 }
