@@ -17,7 +17,7 @@
    from 0 to totalNumRouters - 1. To get the information for the corresponding router in that matrix, just index into struct neighbors.theNeighbors[i].
    Ex: dijkstra[2][2] 's information will be in struct neighbors.theNeighbors[2]
 */
-
+int node_to_forward_to(int*, int, int);
 int countFile(char *);
 char* lsp_serialize(struct linkStatePacket *);
 struct linkStatePacket * lsp_deserialize(char *);
@@ -31,9 +31,9 @@ struct router * newRouter(char **, struct neighbors *);
 int getLabelIndex(char, char *, int);
 struct matrix * build_dijkstra(struct router *);
 void printGraph (struct matrix *);
-void dijkstra_shortest_path(struct matrix *, int, int);
+struct dijkstra_return_v * dijkstra_shortest_path(struct matrix *, int, int);
 int minimumDistance(boolean *, int *, int);
-
+void print_forwarding_table(struct router *, struct dijkstra_return_v *);
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
   struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
@@ -46,14 +46,18 @@ int main (int argc, char *argv[]) {
 
   printGraph(dijkstra);
 
-  printf("Shortest distances:\n");
-  printf(" %3c %3c %3c\n", theRouter->networkLabels[0], theRouter->networkLabels[1], theRouter->networkLabels[2]);
-  printf("%c", theRouter->label);
-  dijkstra_shortest_path(dijkstra, getLabelIndex(theRouter->label, theRouter->networkLabels, theRouter->networkLabelsLength), getLabelIndex('B', theRouter->networkLabels ,theRouter->networkLabelsLength));
+//  printf("Shortest distances:\n");
+//  printf(" %3c %3c %3c\n", theRouter->networkLabels[0], theRouter->networkLabels[1], theRouter->networkLabels[2]);
+//  printf("%c", theRouter->label);
+  struct dijkstra_return_v *rv = dijkstra_shortest_path(dijkstra, getLabelIndex(theRouter->label, theRouter->networkLabels, theRouter->networkLabelsLength), getLabelIndex('B', theRouter->networkLabels ,theRouter->networkLabelsLength));
+
+  print_forwarding_table(theRouter, rv);
 
 
 
-
+  free(rv->prev);
+  free(rv->dist);
+  free(rv);
   free(theRouter->entries); // add to cleanup later
   free(theRouter); // add to cleanup later
   int i = 0;
@@ -64,6 +68,21 @@ int main (int argc, char *argv[]) {
   free(dijkstra);
   cleanup(theNeighbors);
   return 0;
+}
+void print_forwarding_table(struct router * theRouter, struct dijkstra_return_v *rv) {
+  printf("Forwarding table\n");
+  int i;
+  printf(" ");
+  for(i = 1; i < theRouter->networkLabelsLength; i++){
+    printf("%3c", theRouter->networkLabels[i]);
+  }
+  printf("\n");
+  printf("%c", theRouter->networkLabels[0]);
+
+  for(i = 1; i < theRouter->networkLabelsLength; i++){
+    printf("%3c", theRouter->networkLabels[node_to_forward_to(rv->prev, 0, i)]);
+  }
+  printf("\n");
 }
 
 void printGraph(struct matrix * graph){
@@ -106,15 +125,15 @@ struct matrix * build_dijkstra (struct router * router) {
     return matrix;
 }
 
+//TODO Change this to match new struct linkStatePacket
 struct entry * receive_lsp( char * packet) {
   struct linkStatePacket * packet_d = lsp_deserialize(packet);
-  struct entry * entry = malloc(sizeof(entry));
-  entry->to = packet_d->entry.to;
-  entry->from = packet_d->entry.from;
-  entry->cost = packet_d->entry.cost;
+//  entry->to = packet_d->entry.to;
+//  entry->from = packet_d->entry.from;
+//  entry->cost = packet_d->entry.cost;
 
   free(packet_d);
-  return entry;
+  return NULL;//entry;
 }
 
 struct router * newRouter(char **argv, struct neighbors * theNeighbors) {
@@ -250,6 +269,7 @@ int countFile(char * filename) {
 * @param struct linkStatePacket * pointer to the desired packet to be serialized
 * @return char * representation of a struct linkStatePacket
 */
+//TODO change this to match new struct linkStatePacket
 char * lsp_serialize(struct linkStatePacket * packet) {
   if (packet == NULL) return NULL;
   char * packet_toString = NULL;
@@ -266,23 +286,25 @@ char * lsp_serialize(struct linkStatePacket * packet) {
   memcpy(packet_toString + 3, seqToString, 2);
   memset(packet_toString + 5, ',', 1);
 
-  memset(packet_toString + 6, packet->entry.from, 1);
+//  memset(packet_toString + 6, packet->entry.from, 1);
   memset(packet_toString + 7, ',', 1);
 
-  memcpy(packet_toString + 8, packet->routerInfo.hostname, 29);
-  memset(packet_toString + 8 + strlen(packet->routerInfo.hostname), ' ', 29 - strlen(packet->routerInfo.hostname));
+//  memcpy(packet_toString + 8, packet->routerInfo.hostname, 29);
+//  memset(packet_toString + 8 + strlen(packet->routerInfo.hostname), ' ', 29 - strlen(packet->routerInfo.hostname));
   memset(packet_toString + 37, ',', 1);
 
   char portToString[6] = "";
-  sprintf(portToString, "%i", packet->routerInfo.portNumber);
+//  sprintf(portToString, "%i", packet->routerInfo.portNumber);
   memcpy(packet_toString + 38, portToString, 5);
   memset(packet_toString + 43, ',', 1);
 
   char costToString[5] = "";
-  sprintf(costToString, "%i", packet->routerInfo.cost);
+//  sprintf(costToString, "%i", packet->routerInfo.cost);
   memcpy(packet_toString + 44, costToString, 4);
   memset(packet_toString + 48, ',', 1);
-  memset(packet_toString + 49, packet->entry.to, 1);
+
+  //TODO change this to add all of the router's entries instead of just the one
+//  memset(packet_toString + 49, packet->entry.to, 1);
   memset(packet_toString + 50, ',', 1);
   memset(packet_toString + 51, 0, 1);
   int i = 0;
@@ -304,6 +326,7 @@ char * lsp_serialize(struct linkStatePacket * packet) {
 * @param packet_s - char * a serialized version of a struct linkStatePacket
 * @return struct linkStatePacket * pointer to the constructed/deserialized linkStatePacket
 */
+//TODO change this to match new struct linkStatePacket
 struct linkStatePacket * lsp_deserialize(char *packet_s) {
   char * token;
   struct linkStatePacket *packet_d = NULL;
@@ -319,26 +342,31 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
   token = strtok(NULL, ",");
 //  printf("t:%s\n", token);
 
-
+//TODO extract numEntries
+  //packet_d->numEntries = atoi(token);
   // deserialize struct neighbor
   // get the label
-  packet_d->routerInfo.label = token[0];
-  packet_d->entry.from = token[0];
+//  packet_d->routerInfo.label = token[0];
+/* TODO
+  for i < numEntries
+    add new entry to packet_d
+*/
+  //packet_d->entry.from = token[0];
   token = strtok(NULL, ",");
 //  printf("t:%s\n", token);
   // get the hostname
-  strcpy(packet_d->routerInfo.hostname , token);
+//  strcpy(packet_d->routerInfo.hostname , token);
   token = strtok(NULL, ",");
   printf("t:%s\n", token);
   // get the portNum
-  packet_d->routerInfo.portNumber = atoi(token);
+//  packet_d->routerInfo.portNumber = atoi(token);
   token = strtok(NULL, ",");
 //  printf("t:%s\n", token);
   // get the cost
-  packet_d->entry.cost = atoi(token);
+//  packet_d->entry.cost = atoi(token);
   token = strtok(NULL, ",");
   // get the labelTo
-  packet_d->entry.to = token[0];
+//  packet_d->entry.to = token[0];
 
   return packet_d;
 }
@@ -349,8 +377,10 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
 void print_lsp(struct linkStatePacket * packet){
   printf("Hop Counter: %i\n", packet->hopCounter);
   printf("seqNumber: %i\n", packet->seqNumber);
-  print_struct_neighbor(packet->routerInfo);
-  printEntry(packet->entry);
+//  print_struct_neighbor(packet->routerInfo);
+  int i;
+  for( i = 0 ; i < packet->numEntries; ++i)
+    printEntry(packet->entries[i]);
   return;
 }
 /*
@@ -373,7 +403,7 @@ void print_struct_neighbor(struct neighbor routerInfo) {
 */
 int getLabelIndex(char label, char *allLabels, int allLabelsLength) {
   if (label > 'Z' || label < 'A') {
-    printf("Invalid label.\n");
+    printf("Invalid label %c.\n", label);
     return -1;
   }
   int i;
@@ -390,7 +420,7 @@ void printEntry (struct entry entry){
   return;
 }
 
-void dijkstra_shortest_path (struct matrix * graph, int start, int dest) {
+struct dijkstra_return_v * dijkstra_shortest_path (struct matrix * graph, int start, int dest) {
     //boolean[] visited = new boolean[V];
     boolean visited[graph->rows];
     //int[] dist = new int[V]; //stores best distance from start to all other nodes.
@@ -423,13 +453,12 @@ void dijkstra_shortest_path (struct matrix * graph, int start, int dest) {
           }
       }
     }
-    i = 0;
-    while ( i < graph->rows) {
-      if (dist[i] != INT_MAX)
-      printf(" %2i ", dist[i]);
-      i++;
-    }
-    printf("\n");
+    struct dijkstra_return_v *rv = malloc(sizeof(struct dijkstra_return_v));
+    rv->dist = malloc(sizeof(int)* graph->rows);
+    rv->prev = malloc(sizeof(int) * graph->rows);
+    memcpy(rv->dist, dist, sizeof(dist));
+    memcpy(rv->prev, prev, sizeof(prev));
+    return rv;
   }
 
   int minimumDistance (boolean *visited, int * dist, int V) {
@@ -443,4 +472,9 @@ void dijkstra_shortest_path (struct matrix * graph, int start, int dest) {
       }
     }
     return u;
+}
+
+int node_to_forward_to(int *prev, int src, int dest) {
+  if ( prev[dest] == src) return dest;
+  return node_to_forward_to(prev, src, prev[dest]);
 }

@@ -38,8 +38,14 @@ struct router {
 struct linkStatePacket {
   int hopCounter;
   int seqNumber;
-  struct neighbor routerInfo;
-  struct entry entry;
+  char routerLabel; // this could probably just be changed to char label
+  int numEntries;
+  struct entry * entries;
+};
+
+struct dijkstra_return_v {
+  int *dist;
+  int *prev;
 };
 
 struct matrix {
