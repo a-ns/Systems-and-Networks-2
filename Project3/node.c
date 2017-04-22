@@ -11,29 +11,11 @@
 #include <limits.h>
 #include <string.h>
 #include <unistd.h>
-#include "mahtypes.h"
-
+#include "node.h"
 /* Our Dijkstra matrix will be a 2D array of ints. The rows/columns will correspond to the neighboring nodes represented as an integer
    from 0 to totalNumRouters - 1. To get the information for the corresponding router in that matrix, just index into struct neighbors.theNeighbors[i].
    Ex: dijkstra[2][2] 's information will be in struct neighbors.theNeighbors[2]
 */
-int node_to_forward_to(int*, int, int);
-int countFile(char *);
-char* lsp_serialize(struct linkStatePacket *);
-struct linkStatePacket * lsp_deserialize(char *);
-struct neighbors * readFile(char*, int);
-void checkCommandLineArguments(int, char**);
-void cleanup(struct neighbors *);
-void print_lsp(struct linkStatePacket *);
-void print_struct_neighbor(struct neighbor);
-void printEntry( struct entry );
-struct router * newRouter(char **, struct neighbors *);
-int getLabelIndex(char, char *, int);
-struct matrix * build_dijkstra(struct router *);
-void printGraph (struct matrix *);
-struct dijkstra_return_v * dijkstra_shortest_path(struct matrix *, int, int);
-int minimumDistance(boolean *, int *, int);
-void print_forwarding_table(struct router *, struct dijkstra_return_v *);
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
   struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
@@ -45,7 +27,7 @@ int main (int argc, char *argv[]) {
 
   printGraph(dijkstra);
 
-  struct dijkstra_return_v *rv = dijkstra_shortest_path(dijkstra, getLabelIndex(theRouter->label, theRouter->networkLabels, theRouter->networkLabelsLength), getLabelIndex('B', theRouter->networkLabels ,theRouter->networkLabelsLength));
+  struct dijkstra_return_v *rv = dijkstra_shortest_path(dijkstra, getLabelIndex(theRouter->label, theRouter->networkLabels, theRouter->networkLabelsLength));
 
   print_forwarding_table(theRouter, rv);
 
@@ -64,6 +46,11 @@ int main (int argc, char *argv[]) {
   cleanup(theNeighbors);
   return 0;
 }
+
+/* Prints the forwarding table for this router.
+* @param struct router * theRouter - the router whose table is to be printed
+* @param struct dijkstra_return_v *rv - the return values from dijkstras shortest path (a int dist[] and int prev[])
+*/
 void print_forwarding_table(struct router * theRouter, struct dijkstra_return_v *rv) {
   printf("Forwarding table\n");
   int i;
@@ -80,6 +67,9 @@ void print_forwarding_table(struct router * theRouter, struct dijkstra_return_v 
   printf("\n");
 }
 
+/* Prints a 2D array/adjacency matrix pointed to by  struct matrix * graph
+* @param graph - the graph to be printe
+*/
 void printGraph(struct matrix * graph){
   int i,j;
   for(i = 0; i < graph->rows; i++){
@@ -91,6 +81,9 @@ void printGraph(struct matrix * graph){
   return;
 }
 
+/* Builds an adjacency matrix out of the router passed in
+*
+*/
 struct matrix * build_dijkstra (struct router * router) {
     if(router == NULL) return NULL;
     struct matrix * matrix = malloc(sizeof(struct matrix));
@@ -131,6 +124,9 @@ struct entry * receive_lsp( char * packet) {
   return NULL;//entry;
 }
 
+/* Constructs a new router/node from the command line arguments and from the neighbors read from a text file
+* @return pointer to the router created
+*/
 struct router * newRouter(char **argv, struct neighbors * theNeighbors) {
   struct router * theRouter = malloc(sizeof(struct router));
   theRouter->label = argv[1][0];
@@ -157,10 +153,13 @@ struct router * newRouter(char **argv, struct neighbors * theNeighbors) {
   return theRouter;
 }
 
+/* Makes sure there are the correct number of command line arguments (5 or 6)
+*  On failure, program will exit
+*/
 void checkCommandLineArguments(int argc, char *argv[]) {
   if (argc != 6 && argc != 5){
     printf("usage: node routerLabel portNum totalNumRouters discoverFile [-dynamic]\n");
-    exit(0);
+    exit(1);
   }
   return;
 }
@@ -206,26 +205,20 @@ struct neighbors * readFile(char * filename, int totalNumRouters) {
     ch = 0;
 
     processingNeighbor_String[j-1] = '\0';
-  //  printf("processingNeighbor_String: %s\n", processingNeighbor_String);
     // now strtok the string, and shove the data into theNeighbors
     char * token = NULL;
     //get the label
     token = strtok(processingNeighbor_String, ",");
     theNeighbors->theNeighbors[i].label = token[0];
     token = strtok(NULL, ",");
-  //  printf("t:%s\n", token);
     // get the hostname
     strcpy(theNeighbors->theNeighbors[i].hostname , token);
     token = strtok(NULL, ",");
-  //  printf("t:%s\n", token);
     // get the portNum
     theNeighbors->theNeighbors[i].portNumber = atoi(token);
     token = strtok(NULL, ",");
-    //printf("t:%s\n", token);
     // get the cost
     theNeighbors->theNeighbors[i].cost = atoi(token);
-
-    //print_struct_neighbor(theNeighbors->theNeighbors[i]);
   }
   fclose(fp);
   return theNeighbors;
@@ -385,12 +378,18 @@ int getLabelIndex(char label, char *allLabels, int allLabelsLength) {
   return -1;
 }
 
+/* Prints an individual struct entry
+* @param struct entry entry - the entry to be printed
+*/
 void printEntry (struct entry entry){
   printf("Entry: %3c %3c %i\n", entry.from, entry.to, entry.cost);
   return;
 }
 
-struct dijkstra_return_v * dijkstra_shortest_path (struct matrix * graph, int start, int dest) {
+/* Computes a shortest path vector and a prev node vector for an adjacency matrix
+*
+*/
+struct dijkstra_return_v * dijkstra_shortest_path (struct matrix * graph, int start) {
     //boolean[] visited = new boolean[V];
     boolean visited[graph->rows];
     //int[] dist = new int[V]; //stores best distance from start to all other nodes.
