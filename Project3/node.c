@@ -42,6 +42,7 @@ int main (int argc, char *argv[]) {
   // whenever a new lsp comes in, add its values to theRouter->entries
   // if lsp contains a new undiscovered router, add it to theRouter->networkLabels[theRouter->networkLabelsLength++]
 
+
   struct matrix * dijkstra = build_dijkstra(theRouter);
 
   printGraph(dijkstra);
@@ -263,61 +264,46 @@ int countFile(char * filename) {
   printf("numOfNeighbors: %i\n", lines);
   return lines;
 }
-// [ hop | hop | seq | seq | labelFrom | h|o | s| t| n| a| m|e |. |. |. | .|. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |. |p | o| r| t | .| c|o |s |t | labelTo |\0]
 /*
 * Serializes a struct linkStatePacket to send it across a network
 * @param struct linkStatePacket * pointer to the desired packet to be serialized
 * @return char * representation of a struct linkStatePacket
 */
-//TODO change this to match new struct linkStatePacket
 char * lsp_serialize(struct linkStatePacket * packet) {
   if (packet == NULL) return NULL;
   char * packet_toString = NULL;
-  packet_toString = malloc(55);
-  memset(packet_toString, ' ', 55);
+  packet_toString = malloc(60);
+  memset(packet_toString, 0, 60);
+
+  //hop counter
   char hopToString[4] = "";
   sprintf(hopToString, "%i", packet->hopCounter);
   memcpy(packet_toString, hopToString, 2);
-  memset(packet_toString + 2, ',', 1);
-
-
+  memset(packet_toString + strlen(packet_toString), ',', 1);
+  //seq number
   char seqToString[3] = "";
   sprintf(seqToString, "%i", packet->seqNumber);
-  memcpy(packet_toString + 3, seqToString, 2);
-  memset(packet_toString + 5, ',', 1);
+  memcpy(packet_toString + strlen(packet_toString), seqToString, 2);
+  memset(packet_toString + strlen(packet_toString), ',', 1);
+  //router label
+  memset(packet_toString + strlen(packet_toString), packet->routerLabel,1);
+  memset(packet_toString + strlen(packet_toString), ',', 1);
+  //num entries
+  char numEntries[4] = "";
+  sprintf(numEntries, "%i", packet->numEntries);
+  memcpy(packet_toString + strlen(packet_toString), numEntries, 4);
+  memset(packet_toString + strlen(packet_toString), ',', 1);
 
-//  memset(packet_toString + 6, packet->entry.from, 1);
-  memset(packet_toString + 7, ',', 1);
-
-//  memcpy(packet_toString + 8, packet->routerInfo.hostname, 29);
-//  memset(packet_toString + 8 + strlen(packet->routerInfo.hostname), ' ', 29 - strlen(packet->routerInfo.hostname));
-  memset(packet_toString + 37, ',', 1);
-
-  char portToString[6] = "";
-//  sprintf(portToString, "%i", packet->routerInfo.portNumber);
-  memcpy(packet_toString + 38, portToString, 5);
-  memset(packet_toString + 43, ',', 1);
-
-  char costToString[5] = "";
-//  sprintf(costToString, "%i", packet->routerInfo.cost);
-  memcpy(packet_toString + 44, costToString, 4);
-  memset(packet_toString + 48, ',', 1);
-
-  //TODO change this to add all of the router's entries instead of just the one
-//  memset(packet_toString + 49, packet->entry.to, 1);
-  memset(packet_toString + 50, ',', 1);
-  memset(packet_toString + 51, 0, 1);
-  int i = 0;
-  while(i < 51){
-    if(packet_toString[i] == '\0') {
-      fprintf(stderr, "/");
-    }
-    fprintf(stderr, "%c", packet_toString[i]);
-
-    i++;
+  //struct entry entries
+  int i;
+  for(i = 0 ; i < packet->numEntries; i++) {
+    memset(packet_toString + strlen(packet_toString), packet->entries[i].to, 1);
+    memset(packet_toString + strlen(packet_toString), ',', 1);
+    char costToString[4] = "";
+    sprintf(costToString, "%i", packet->entries[i].cost);
+    memcpy(packet_toString + strlen(packet_toString), costToString, 3);
+    memset(packet_toString + strlen(packet_toString), ',', 1);
   }
-  fprintf(stderr, "\n");
-
   return packet_toString;
 }
 
