@@ -41,19 +41,13 @@ int main (int argc, char *argv[]) {
   struct router * theRouter = newRouter(argv, theNeighbors);
   // whenever a new lsp comes in, add its values to theRouter->entries
   // if lsp contains a new undiscovered router, add it to theRouter->networkLabels[theRouter->networkLabelsLength++]
-
-
   struct matrix * dijkstra = build_dijkstra(theRouter);
 
   printGraph(dijkstra);
 
-//  printf("Shortest distances:\n");
-//  printf(" %3c %3c %3c\n", theRouter->networkLabels[0], theRouter->networkLabels[1], theRouter->networkLabels[2]);
-//  printf("%c", theRouter->label);
   struct dijkstra_return_v *rv = dijkstra_shortest_path(dijkstra, getLabelIndex(theRouter->label, theRouter->networkLabels, theRouter->networkLabelsLength), getLabelIndex('B', theRouter->networkLabels ,theRouter->networkLabelsLength));
 
   print_forwarding_table(theRouter, rv);
-
 
 
   free(rv->prev);
@@ -312,50 +306,40 @@ char * lsp_serialize(struct linkStatePacket * packet) {
 * @param packet_s - char * a serialized version of a struct linkStatePacket
 * @return struct linkStatePacket * pointer to the constructed/deserialized linkStatePacket
 */
-//TODO change this to match new struct linkStatePacket
 struct linkStatePacket * lsp_deserialize(char *packet_s) {
   char * token;
   struct linkStatePacket *packet_d = NULL;
   packet_d = malloc(sizeof(struct linkStatePacket));
+  //malloc packet_d->entries when we get to that part in the packet_s
+
+  //hopCounter
   token = strtok(packet_s, ",");
-//  printf("t:%s\n", token);
-  // get the hop counter
   packet_d->hopCounter = atoi(token);
-  token = strtok(NULL, ",");
-//  printf("t:%s\n", token);
-  // get the seqNumber
+
+  //seqNumber
+  token=strtok(NULL, ",");
   packet_d->seqNumber = atoi(token);
-  token = strtok(NULL, ",");
-//  printf("t:%s\n", token);
 
-//TODO extract numEntries
-  //packet_d->numEntries = atoi(token);
-  // deserialize struct neighbor
-  // get the label
-//  packet_d->routerInfo.label = token[0];
-/* TODO
-  for i < numEntries
-    add new entry to packet_d
-*/
-  //packet_d->entry.from = token[0];
+  //routerLabel
   token = strtok(NULL, ",");
-//  printf("t:%s\n", token);
-  // get the hostname
-//  strcpy(packet_d->routerInfo.hostname , token);
-  token = strtok(NULL, ",");
-  printf("t:%s\n", token);
-  // get the portNum
-//  packet_d->routerInfo.portNumber = atoi(token);
-  token = strtok(NULL, ",");
-//  printf("t:%s\n", token);
-  // get the cost
-//  packet_d->entry.cost = atoi(token);
-  token = strtok(NULL, ",");
-  // get the labelTo
-//  packet_d->entry.to = token[0];
+  packet_d->routerLabel = token[0];
 
+  //numEntries
+  token=strtok(NULL, ",");
+  packet_d->numEntries = atoi(token);
+
+  //malloc entries now
+  packet_d->entries = malloc(sizeof(struct entry) * packet_d->numEntries);
+
+  int i;
+  for(i = 0 ; i < packet_d->numEntries; ++i) {
+    packet_d->entries[i].from = packet_d->routerLabel;
+    packet_d->entries[i].to = strtok(NULL, ",")[0];
+    packet_d->entries[i].cost = atoi(strtok(NULL, ","));
+  }
   return packet_d;
 }
+
 /*
 * Prints the struct linkStatePacket pointed to by packet
 * @param packet - struct linkStatePacket *
@@ -363,7 +347,7 @@ struct linkStatePacket * lsp_deserialize(char *packet_s) {
 void print_lsp(struct linkStatePacket * packet){
   printf("Hop Counter: %i\n", packet->hopCounter);
   printf("seqNumber: %i\n", packet->seqNumber);
-//  print_struct_neighbor(packet->routerInfo);
+  printf("routerLabel: %c\n", packet->routerLabel);
   int i;
   for( i = 0 ; i < packet->numEntries; ++i)
     printEntry(packet->entries[i]);

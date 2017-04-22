@@ -1,12 +1,13 @@
+struct linkStatePacket * packet_d = malloc(sizeof(struct linkStatePacket));
+packet_d->entries = malloc(sizeof(struct entry) * 3);
+packet_d->hopCounter = 5;
+packet_d->seqNumber = 2;
+packet_d->routerLabel = 'B';
+packet_d->numEntries = 3;
+packet_d->entries[0].to = 'C'; packet_d->entries[0].cost = 12;
+packet_d->entries[1].to = 'D'; packet_d->entries[1].cost = 5;
+packet_d->entries[2].to = 'E'; packet_d->entries[2].cost = 212;
 
-  struct linkStatePacket * packet_d = malloc(sizeof(struct linkStatePacket));
-  packet_d->entries = malloc(sizeof(struct entry) * 3);
-  packet_d->hopCounter = 5;
-  packet_d->seqNumber = 2;
-  packet_d->routerLabel = 'B';
-  packet_d->numEntries = 3;
-  packet_d->entries[0].to = 'C'; packet_d->entries[0].cost = 12;
-  packet_d->entries[1].to = 'D'; packet_d->entries[1].cost = 5;
-  packet_d->entries[2].to = 'E'; packet_d->entries[2].cost = 212;
-
-  printf("Serialized: %s\n", lsp_serialize(packet_d));
+printf("Serialized: %s\n", lsp_serialize(packet_d));
+printf("Deserialized: ");
+print_lsp(lsp_deserialize(lsp_serialize(packet_d)));
