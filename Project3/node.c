@@ -87,29 +87,41 @@ void * flooding_thread (void *vrouter) {
     seqNumbers[i] = 0;
   }
   int numOfFloodedNodes = 0;
-  struct tmp_thread_stuff {
-    int *seqNumbers;
-    int seqNumbersLength;
-    int sockfd;
-    char *buffer;
-    char *bufferLength;
-    struct sockaddr_in *src;
-    int *numOfFloodedNodes;
-  };
   while(numOfFloodedNodes < router->numRouters) {
-    char buffer[500];
-    int length = 500;
-    receive_lsp(sockfd, buffer, &length, &src);
+
+    struct linkStatePacket *packet = receive_lsp(seqNumbers, router, sockfd, &src);
+    // forward the packet to our neighbors
+    if (--packet->hopCounter > 0) {
+      //forward packet
+      /* for each neighbor in neighbors
+          sendto(neighbor, lsp_serialize(packet));
+      */
+    }
+
     numOfFloodedNodes++;
+
+    free(packet->entries);
+    free(packet);
   }
-  sem_post(&flood_lock);
+  sem_post(&flood_lock); // let the main thread know it's okay to run dijkstra's now
   pthread_exit(0);
 }
 
-int receive_lsp (int sock, char * buf ,int * length, struct sockaddr_in *connection) {
-  recvfrom(sock, buf, *length, 0, (struct sockaddr *)connection, (void *) length);
-  printf("%s\n", buf);
-  return 0;
+struct linkStatePacket * receive_lsp (int *seqNumbers, struct router *router, int sock, struct sockaddr_in *connection) {
+  char buffer[500];
+  int length = 500;
+  recvfrom(sock, buffer, length, 0, (struct sockaddr *)connection, (void *) &length);
+  struct linkStatePacket *packet = lsp_deserialize(buffer); // now stuff info from packet into router
+  int i;
+  // check the seqNumber
+  for(i = 0; i < packet->numEntries; i++){
+    router->entries[router->numEntries].to = packet->entries[i].to;
+    router->entries[router->numEntries].from = packet->entries[i].from;
+    router->entries[router->numEntries].cost = packet->entries[i].cost;
+    router->numEntries++;
+
+  }
+  return packet;
 }
 
 /* Prints the forwarding table for this router.

@@ -22,6 +22,6 @@ void print_forwarding_table(struct router *, struct dijkstra_return_v *);
 void initialize_network(int *, struct sockaddr_in *, struct hostent**, char *, int *);
 void * flooding_thread(void *);
 void spawn_flooding_thread(pthread_t *, struct router *);
-int receive_lsp (int , char * ,int *, struct sockaddr_in *);
+struct linkStatePacket * receive_lsp (int *, struct router *, int ,  struct sockaddr_in *);
 
 #endif // __NODE_H_
