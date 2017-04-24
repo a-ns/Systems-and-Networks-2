@@ -80,6 +80,8 @@ void * flooding_thread (void *vrouter) {
   char hostname[500];
   initialize_network(&sockfd, &src, &hostptr, hostname, &(router->portNumber));
 
+  // flood our neighbors to the network
+
 
   int seqNumbers[router->numRouters];
   int i;
@@ -114,6 +116,11 @@ struct linkStatePacket * receive_lsp (int *seqNumbers, struct router *router, in
   struct linkStatePacket *packet = lsp_deserialize(buffer); // now stuff info from packet into router
   int i;
   // check the seqNumber
+  if (seqNumbers[getLabelIndex(packet->routerLabel, router->networkLabels, router->networkLabelsLength)] > packet->seqNumber) {
+    return packet; // old packet for us, don't add its entries, just flood it to neighbors
+  }
+  seqNumbers[getLabelIndex(packet->routerLabel, router->networkLabels, router->networkLabelsLength)] = packet->seqNumber; // make this the current seq Number
+  /* now add the entries in the packet to the entries in the router */
   for(i = 0; i < packet->numEntries; i++){
     router->entries[router->numEntries].to = packet->entries[i].to;
     router->entries[router->numEntries].from = packet->entries[i].from;
