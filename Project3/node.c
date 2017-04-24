@@ -11,21 +11,41 @@
 #include <limits.h>
 #include <string.h>
 #include <unistd.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <semaphore.h>
 #include "node.h"
+
 /* Our Dijkstra matrix will be a 2D array of ints. The rows/columns will correspond to the neighboring nodes represented as an integer
    from 0 to totalNumRouters - 1. To get the information for the corresponding router in that matrix, just index into struct neighbors.theNeighbors[i].
    Ex: dijkstra[2][2] 's information will be in struct neighbors.theNeighbors[2]
 */
+
+sem_t flood_lock;
+
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
+  sem_init(&flood_lock, 0, 0);
   struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
 
   struct router * theRouter = newRouter(argv, theNeighbors);
   // whenever a new lsp comes in, add its values to theRouter->entries
   // if lsp contains a new undiscovered router, add it to theRouter->networkLabels[theRouter->networkLabelsLength++]
+
+  /* Flooding */
+  pthread_t flood_thread;
+  spawn_flooding_thread(&flood_thread, theRouter);
+
+
+
+
+  sem_wait(&flood_lock);
   struct matrix * dijkstra = build_dijkstra(theRouter);
 
-  printGraph(dijkstra);
+//  printGraph(dijkstra);
 
   struct dijkstra_return_v *rv = dijkstra_shortest_path(dijkstra, getLabelIndex(theRouter->label, theRouter->networkLabels, theRouter->networkLabelsLength));
 
@@ -44,6 +64,51 @@ int main (int argc, char *argv[]) {
   }
   free(dijkstra);
   cleanup(theNeighbors);
+  return 0;
+}
+
+void spawn_flooding_thread(pthread_t *thread, struct router *router) {
+  pthread_create(thread, NULL, flooding_thread, (void *) router);
+}
+
+void * flooding_thread (void *vrouter) {
+  struct router *router = (struct router *) vrouter;
+
+  int sockfd;
+  struct sockaddr_in src;
+  struct hostent * hostptr;
+  char hostname[500];
+  initialize_network(&sockfd, &src, &hostptr, hostname, &(router->portNumber));
+
+
+  int seqNumbers[router->numRouters];
+  int i;
+  for (i = 0; i < router->numRouters; ++i) {
+    seqNumbers[i] = 0;
+  }
+  int numOfFloodedNodes = 0;
+  struct tmp_thread_stuff {
+    int *seqNumbers;
+    int seqNumbersLength;
+    int sockfd;
+    char *buffer;
+    char *bufferLength;
+    struct sockaddr_in *src;
+    int *numOfFloodedNodes;
+  };
+  while(numOfFloodedNodes < router->numRouters) {
+    char buffer[500];
+    int length = 500;
+    receive_lsp(sockfd, buffer, &length, &src);
+    numOfFloodedNodes++;
+  }
+  sem_post(&flood_lock);
+  pthread_exit(0);
+}
+
+int receive_lsp (int sock, char * buf ,int * length, struct sockaddr_in *connection) {
+  recvfrom(sock, buf, *length, 0, (struct sockaddr *)connection, (void *) length);
+  printf("%s\n", buf);
   return 0;
 }
 
@@ -113,16 +178,7 @@ struct matrix * build_dijkstra (struct router * router) {
     return matrix;
 }
 
-//TODO Change this to match new struct linkStatePacket
-struct entry * receive_lsp( char * packet) {
-  struct linkStatePacket * packet_d = lsp_deserialize(packet);
-//  entry->to = packet_d->entry.to;
-//  entry->from = packet_d->entry.from;
-//  entry->cost = packet_d->entry.cost;
 
-  free(packet_d);
-  return NULL;//entry;
-}
 
 /* Constructs a new router/node from the command line arguments and from the neighbors read from a text file
 * @return pointer to the router created
@@ -131,6 +187,7 @@ struct router * newRouter(char **argv, struct neighbors * theNeighbors) {
   struct router * theRouter = malloc(sizeof(struct router));
   theRouter->label = argv[1][0];
   gethostname(theRouter->hostname, 30);
+  theRouter->portNumber = atoi(argv[2]);
   theRouter->numRouters = atoi(argv[3]);
   theRouter->numEntries = 0;
   theRouter->networkLabels = malloc(theRouter->numRouters + 1);
@@ -446,4 +503,23 @@ struct dijkstra_return_v * dijkstra_shortest_path (struct matrix * graph, int st
 int node_to_forward_to(int *prev, int src, int dest) {
   if ( prev[dest] == src) return dest;
   return node_to_forward_to(prev, src, prev[dest]);
+}
+
+void initialize_network(int *sockfd, struct sockaddr_in *src, struct hostent** hostptr, char *hostname, int *ME_PORT){
+  gethostname(hostname, 100);
+  *hostptr = gethostbyname(hostname);
+  *sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+
+  memset((void *) src, 0, (size_t) sizeof(*src));
+
+  src->sin_family = AF_INET;
+  src->sin_addr.s_addr = htonl(INADDR_ANY);
+  src->sin_port = htons(*ME_PORT);
+  memcpy((void *) &(src->sin_addr), (void *) (*hostptr)->h_addr, (*hostptr)->h_length);
+
+  if(bind(*sockfd, (struct sockaddr *) src, sizeof(*src)) < 0) {
+    perror("bind");
+    exit(1);
+  }
+  fprintf(stderr, "\nWe are listening on: %s:%d\n", inet_ntoa(src->sin_addr), ntohs(src->sin_port));
 }

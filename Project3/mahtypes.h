@@ -28,6 +28,7 @@ struct entry {
 struct router {
   char label;
   char hostname[30];
+  int portNumber;
   int numRouters;
   int numEntries;
   struct entry * entries;
@@ -53,7 +54,5 @@ struct matrix {
   int cols;
   int **m;
 };
-
-
 
 #endif // _MAHTYPES_H_
