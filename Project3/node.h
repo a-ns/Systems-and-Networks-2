@@ -23,5 +23,6 @@ void initialize_network(int *, struct sockaddr_in *, struct hostent**, char *, i
 void * flooding_thread(void *);
 void spawn_flooding_thread(pthread_t *, struct router *);
 struct linkStatePacket * receive_lsp (int *, struct router *, int ,  struct sockaddr_in *);
+int timeout_recvfrom (int , char *, int *, struct sockaddr_in *, int);
 
 #endif // __NODE_H_

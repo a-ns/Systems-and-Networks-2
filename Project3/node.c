@@ -116,7 +116,7 @@ void * flooding_thread (void *vrouter) {
   while(1) {
     struct linkStatePacket *packet = receive_lsp(seqNumbers, router, sockfd, &src);
     // forward the packet to our neighbors
-    if (--packet->hopCounter > 0) {
+    if (packet != NULL && --packet->hopCounter > 0 && packet) {
       numOfFloodedNodes++;
       //fprintf(stderr, "got a packet from %c, hop counter is good, forwarding it\n", packet->routerLabel);
       //forward packet
@@ -143,11 +143,13 @@ void * flooding_thread (void *vrouter) {
     else {
       //fprintf(stderr,"Hop counter is below. dropping \n");
     }
-    if(numOfFloodedNodes >= router->numRouters)
+    if(packet != NULL) {
+      free(packet->entries);
+      free(packet);
+    }
+    else {
       sem_post(&flood_lock);
-
-    free(packet->entries);
-    free(packet);
+    }
   }
   pthread_exit(0);
 }
@@ -155,30 +157,34 @@ void * flooding_thread (void *vrouter) {
 struct linkStatePacket * receive_lsp (int *seqNumbers, struct router *router, int sock, struct sockaddr_in *connection) {
   char buffer[500];
   int length = 500;
-  recvfrom(sock, buffer, length, 0, (struct sockaddr *)connection, (void *) &length);
-  struct linkStatePacket *packet = lsp_deserialize(buffer); // now stuff info from packet into router
-  int i;
-  // check the seqNumber
-  if (seqNumbers[getLabelIndex(packet->routerLabel, router->networkLabels, router->networkLabelsLength)] > packet->seqNumber) {
-    //fprintf(stderr,"Old packet\n");
-    return packet; // old packet for us, don't add its entries, just flood it to neighbors
-  }
-  seqNumbers[getLabelIndex(packet->routerLabel, router->networkLabels, router->networkLabelsLength)] = packet->seqNumber; // make this the current seq Number
-  /* now add the entries in the packet to the entries in the router */
-  for(i = 0; i < packet->numEntries; i++){
+  if(timeout_recvfrom(sock, buffer, &length, (struct sockaddr_in *)connection, 10)){
+    struct linkStatePacket *packet = lsp_deserialize(buffer); // now stuff info from packet into router
+    int i;
+    // check the seqNumber
+    if (seqNumbers[getLabelIndex(packet->routerLabel, router->networkLabels, router->networkLabelsLength)] > packet->seqNumber) {
+      //fprintf(stderr,"Old packet\n");
+      return packet; // old packet for us, don't add its entries, just flood it to neighbors
+    }
+    seqNumbers[getLabelIndex(packet->routerLabel, router->networkLabels, router->networkLabelsLength)] = packet->seqNumber; // make this the current seq Number
+    /* now add the entries in the packet to the entries in the router */
+    for(i = 0; i < packet->numEntries; i++){
 
-    router->entries[router->numEntries].to = packet->entries[i].to;
-    router->entries[router->numEntries].from = packet->entries[i].from;
-    router->entries[router->numEntries].cost = packet->entries[i].cost;
-    router->numEntries++;
+      router->entries[router->numEntries].to = packet->entries[i].to;
+      router->entries[router->numEntries].from = packet->entries[i].from;
+      router->entries[router->numEntries].cost = packet->entries[i].cost;
+      router->numEntries++;
 
+    }
+    char tmp[2] = "";
+    tmp[0] = packet->routerLabel;
+    if (strstr(router->networkLabels, tmp) == NULL) { // add this label
+      router->networkLabels[router->networkLabelsLength++] = tmp[0];
+    }
+    return packet;
   }
-  char tmp[2] = "";
-  tmp[0] = packet->routerLabel;
-  if (strstr(router->networkLabels, tmp) == NULL) { // add this label
-    router->networkLabels[router->networkLabelsLength++] = tmp[0];
+  else {
+    return NULL;
   }
-  return packet;
 }
 
 /* Prints the forwarding table for this router.
@@ -598,4 +604,29 @@ void initialize_network(int *sockfd, struct sockaddr_in *src, struct hostent** h
     exit(1);
   }
   fprintf(stderr, "\nWe are listening on: %s:%d\n", inet_ntoa(src->sin_addr), ntohs(src->sin_port));
+}
+
+int timeout_recvfrom (int sock, char *buf, int *length, struct sockaddr_in *connection, int timeoutinseconds) {
+    printf("\nIn timeout recvfrom\n");
+    fd_set socks;
+    struct timeval t;
+    FD_ZERO(&socks);
+    FD_SET(sock, &socks);
+    t.tv_sec = timeoutinseconds;
+    t.tv_usec = 0;
+
+    if (select(sock + 1, &socks, NULL, NULL, &t) < 0) {
+      perror("select");
+      exit(1);
+    }
+
+    if (FD_ISSET(sock, &socks)) {
+      recvfrom(sock, buf, *length, 0, (struct sockaddr *)connection, (void *) length);
+
+      return 1;
+    }
+    else {
+      return 0;
+    }
+    return 0;
 }
