@@ -68,6 +68,19 @@ int main (int argc, char *argv[]) {
   return 0;
 }
 
+void discover_change(struct router * router) {
+  int i;
+  for(i = 0; i < router->numEntries; i++) {
+    if(router->neighbors->theNeighbors[0].label == router->entries[i].to
+      && router->neighbors->theNeighbors[0].cost == router->entries[i].cost){
+        router->neighbors->theNeighbors[0].cost = rand() % (12 + 1 - 1) + 1;
+        router->entries[i].cost = router->neighbors->theNeighbors[0].cost;
+        return; // now re run dijkstra on the router
+      }
+  }
+
+}
+
 void spawn_flooding_thread(pthread_t *thread, struct router *router) {
   pthread_create(thread, NULL, flooding_thread, (void *) router);
 }
@@ -157,7 +170,7 @@ void * flooding_thread (void *vrouter) {
 struct linkStatePacket * receive_lsp (int *seqNumbers, struct router *router, int sock, struct sockaddr_in *connection) {
   char buffer[500];
   int length = 500;
-  if(timeout_recvfrom(sock, buffer, &length, (struct sockaddr_in *)connection, 10)){
+  if(timeout_recvfrom(sock, buffer, &length, (struct sockaddr_in *)connection, 20)){
     struct linkStatePacket *packet = lsp_deserialize(buffer); // now stuff info from packet into router
     int i;
     // check the seqNumber
@@ -607,7 +620,7 @@ void initialize_network(int *sockfd, struct sockaddr_in *src, struct hostent** h
 }
 
 int timeout_recvfrom (int sock, char *buf, int *length, struct sockaddr_in *connection, int timeoutinseconds) {
-    printf("\nIn timeout recvfrom\n");
+  //  printf("\nIn timeout recvfrom\n");
     fd_set socks;
     struct timeval t;
     FD_ZERO(&socks);
