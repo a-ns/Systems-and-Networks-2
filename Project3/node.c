@@ -25,9 +25,10 @@
 */
 
 sem_t flood_lock;
-
+boolean DYNAMIC;
 int main (int argc, char *argv[]) {
   checkCommandLineArguments(argc, argv);
+  sleep(10);
   sem_init(&flood_lock, 0, 0);
   struct neighbors * theNeighbors = readFile(argv[4], atoi(argv[3]));
 
@@ -43,15 +44,15 @@ int main (int argc, char *argv[]) {
 
 
   sem_wait(&flood_lock);
+  //fprintf(stderr, "semaphore unlocked, now do dijkstras\n");
   struct matrix * dijkstra = build_dijkstra(theRouter);
-
-//  printGraph(dijkstra);
-
+  //fprintf(stderr, "dijkstra built success\n");
+  printGraph(dijkstra);
+  //fprintf(stderr, "printing dijkstras now\n");
   struct dijkstra_return_v *rv = dijkstra_shortest_path(dijkstra, getLabelIndex(theRouter->label, theRouter->networkLabels, theRouter->networkLabelsLength));
 
   print_forwarding_table(theRouter, rv);
-
-
+  pthread_join(flood_thread, NULL);
   free(rv->prev);
   free(rv->dist);
   free(rv);
@@ -79,9 +80,32 @@ void * flooding_thread (void *vrouter) {
   struct hostent * hostptr;
   char hostname[500];
   initialize_network(&sockfd, &src, &hostptr, hostname, &(router->portNumber));
-
+  sleep(5);
   // flood our neighbors to the network
+  /* for each neighbor in neighbors
+    sendto(neighbor, lsp_serialize(us))
+  */
 
+  int k;
+  for(k = 0; k < router->neighbors->numOfNeighbors; k++) {
+    struct linkStatePacket packet;
+    packet.hopCounter = 6;
+    packet.seqNumber = 0;
+    packet.routerLabel = router->label;
+    packet.numEntries = router->numEntries;
+    packet.entries = router->entries;
+    struct sockaddr_in neighbor;
+    struct hostent *hostptr;
+    hostptr = gethostbyname(router->neighbors->theNeighbors[k].hostname);
+    memset((void *) &neighbor, 0, (size_t) sizeof(neighbor));
+    neighbor.sin_family = AF_INET;
+    memcpy((void *) &(neighbor.sin_addr), (void *) hostptr->h_addr, hostptr->h_length);
+    neighbor.sin_port = htons((u_short) router->neighbors->theNeighbors[k].portNumber);
+
+    sendto(sockfd, lsp_serialize(&packet), strlen(lsp_serialize(&packet)) + 1, 0, (struct sockaddr *) &neighbor, sizeof(neighbor));
+    //fprintf(stderr, "sent flood packet\n");
+  }
+  //fprintf(stderr, "done flooding\n");
 
   int seqNumbers[router->numRouters];
   int i;
@@ -89,23 +113,42 @@ void * flooding_thread (void *vrouter) {
     seqNumbers[i] = 0;
   }
   int numOfFloodedNodes = 0;
-  while(numOfFloodedNodes < router->numRouters) {
-
+  while(1) {
     struct linkStatePacket *packet = receive_lsp(seqNumbers, router, sockfd, &src);
     // forward the packet to our neighbors
     if (--packet->hopCounter > 0) {
+      numOfFloodedNodes++;
+      //fprintf(stderr, "got a packet from %c, hop counter is good, forwarding it\n", packet->routerLabel);
       //forward packet
       /* for each neighbor in neighbors
           sendto(neighbor, lsp_serialize(packet));
       */
+      int j;
+      for(j = 0; j < router->neighbors->numOfNeighbors; j++) {
+        if (router->neighbors->theNeighbors[j].label != packet->routerLabel) {
+          //fprintf(stderr, "preparing %i\n", j);
+          struct sockaddr_in neighbor;
+          struct hostent *hostptr;
+          hostptr = gethostbyname(router->neighbors->theNeighbors[j].hostname);
+          memset((void *) &neighbor, 0, (size_t) sizeof(neighbor));
+          neighbor.sin_family = AF_INET;
+          memcpy((void *) &(neighbor.sin_addr), (void *) hostptr->h_addr, hostptr->h_length);
+          neighbor.sin_port = htons((u_short) router->neighbors->theNeighbors[j].portNumber);
+          //fprintf(stderr, "about to send to %i\n", j);
+          sendto(sockfd, lsp_serialize(packet), strlen(lsp_serialize(packet)) + 1, 0, (struct sockaddr *) &neighbor, sizeof(neighbor));
+          //fprintf(stderr, "send successfully to %c\n", router->neighbors->theNeighbors[j].label);
+        }
+      }
     }
-
-    numOfFloodedNodes++;
+    else {
+      //fprintf(stderr,"Hop counter is below. dropping \n");
+    }
+    if(numOfFloodedNodes >= router->numRouters)
+      sem_post(&flood_lock);
 
     free(packet->entries);
     free(packet);
   }
-  sem_post(&flood_lock); // let the main thread know it's okay to run dijkstra's now
   pthread_exit(0);
 }
 
@@ -117,16 +160,23 @@ struct linkStatePacket * receive_lsp (int *seqNumbers, struct router *router, in
   int i;
   // check the seqNumber
   if (seqNumbers[getLabelIndex(packet->routerLabel, router->networkLabels, router->networkLabelsLength)] > packet->seqNumber) {
+    //fprintf(stderr,"Old packet\n");
     return packet; // old packet for us, don't add its entries, just flood it to neighbors
   }
   seqNumbers[getLabelIndex(packet->routerLabel, router->networkLabels, router->networkLabelsLength)] = packet->seqNumber; // make this the current seq Number
   /* now add the entries in the packet to the entries in the router */
   for(i = 0; i < packet->numEntries; i++){
+
     router->entries[router->numEntries].to = packet->entries[i].to;
     router->entries[router->numEntries].from = packet->entries[i].from;
     router->entries[router->numEntries].cost = packet->entries[i].cost;
     router->numEntries++;
 
+  }
+  char tmp[2] = "";
+  tmp[0] = packet->routerLabel;
+  if (strstr(router->networkLabels, tmp) == NULL) { // add this label
+    router->networkLabels[router->networkLabelsLength++] = tmp[0];
   }
   return packet;
 }
@@ -189,9 +239,12 @@ struct matrix * build_dijkstra (struct router * router) {
     }
 
     i = 0;
+    //fprintf(stderr,"%i\n\n", router->numEntries);
     while ( i < router->numEntries) {
+      //fprintf(stderr, "good here\n");
       matrix->m[getLabelIndex(router->entries[i].from, router->networkLabels, router->networkLabelsLength)][getLabelIndex(router->entries[i].to, router->networkLabels, router->networkLabelsLength)] = router->entries[i].cost;
       i++;
+      //fprintf(stderr, "%i\n", i);
     }
 
     return matrix;
@@ -204,6 +257,7 @@ struct matrix * build_dijkstra (struct router * router) {
 */
 struct router * newRouter(char **argv, struct neighbors * theNeighbors) {
   struct router * theRouter = malloc(sizeof(struct router));
+  theRouter->neighbors = theNeighbors;
   theRouter->label = argv[1][0];
   gethostname(theRouter->hostname, 30);
   theRouter->portNumber = atoi(argv[2]);
@@ -236,6 +290,9 @@ void checkCommandLineArguments(int argc, char *argv[]) {
   if (argc != 6 && argc != 5){
     printf("usage: node routerLabel portNum totalNumRouters discoverFile [-dynamic]\n");
     exit(1);
+  }
+  if(argc == 6) {
+    DYNAMIC = TRUE;
   }
   return;
 }

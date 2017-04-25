@@ -34,6 +34,7 @@ struct router {
   struct entry * entries;
   char *networkLabels;
   int networkLabelsLength;
+  struct neighbors *neighbors;
 };
 
 struct linkStatePacket {
