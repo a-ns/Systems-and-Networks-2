@@ -559,8 +559,8 @@ struct dijkstra_return_v * dijkstra_shortest_path (struct matrix * graph, int st
     for (fromV = 0; fromV < graph->rows - 1; fromV++) {
       int current = minimumDistance(visited, dist, graph->rows); //find the next vertex to work on. starts with start vertex because we set it to zero.
       visited[current] = TRUE; //mark the current node as visited so we don't keep doing it
-
-      for (int toV = 0; toV < graph->rows; toV++) {
+      int toV;
+      for (toV = 0; toV < graph->rows; toV++) {
         /* 1. check if the toV (vertex) is not visited
            2. if there is an edge from current to toV (0 in the graph indicates no edge)
            3. dist[current] is obviously not MAX_VALUE for the one to do, but we want to make this check so that 4) does not overflow
